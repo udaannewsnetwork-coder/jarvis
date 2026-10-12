@@ -1,43 +1,23 @@
-# JARVIS AI Assistant
+## Vercel setup and adding the OpenAI API key
 
-A JARVIS-inspired AI assistant built with Next.js and OpenAI. This project is designed to be easy to deploy on Vercel.
+To deploy this project on Vercel and let it call OpenAI, you need to add your OpenAI API key as an environment variable:
 
-## Features
+1. Go to https://vercel.com and import your GitHub repository (udaannewsnetwork-coder/jarvis).
+2. In the Vercel dashboard, open your project, then go to Settings → Environment Variables.
+3. Add a new variable:
+   - Name: `OPENAI_API_KEY`
+   - Value: your OpenAI secret key (starts with `sk-...`)
+   - Environment: set for `Production` and `Preview` (or `Development` if you want)
+4. Save and redeploy the project.
 
-- JARVIS-style chat interface
-- Browser microphone input using SpeechRecognition
-- Voice output using browser speech synthesis
-- OpenAI-backed AI responses
-- Simple Vercel deployment setup
+Locally, you can set it in `.env.local`:
 
-## Quick start
+```
+OPENAI_API_KEY=sk-...
+```
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+Then run `npm run dev` to test locally.
 
-2. Copy `.env.example` to `.env.local` and add your OpenAI key:
-   ```bash
-   cp .env.example .env.local
-   ```
-
-3. Run the app locally:
-   ```bash
-   npm run dev
-   ```
-
-4. Open `http://localhost:3000`
-
-## Vercel deployment
-
-1. Push this repository to GitHub.
-2. Import the repo in Vercel.
-3. In the Vercel project settings, add an environment variable:
-   - `OPENAI_API_KEY` = your OpenAI API key
-4. Deploy the project.
-
-## Notes
-
-- Browser speech support depends on the device/browser. Chrome and Edge usually work best.
-- For best voice experience, use a modern browser with microphone permission enabled.
+Notes:
+- Never commit your real API key to the repository.
+- Monitor usage in your OpenAI dashboard to avoid unexpected charges.
