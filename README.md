@@ -1,23 +1,48 @@
-## Vercel setup and adding the OpenAI API key
+# JARVIS AI Assistant
 
-To deploy this project on Vercel and let it call OpenAI, you need to add your OpenAI API key as an environment variable:
+A JARVIS-inspired AI assistant built with Next.js and OpenAI.
 
-1. Go to https://vercel.com and import your GitHub repository (udaannewsnetwork-coder/jarvis).
-2. In the Vercel dashboard, open your project, then go to Settings → Environment Variables.
-3. Add a new variable:
-   - Name: `OPENAI_API_KEY`
-   - Value: your OpenAI secret key (starts with `sk-...`)
-   - Environment: set for `Production` and `Preview` (or `Development` if you want)
-4. Save and redeploy the project.
+## Features
+- JARVIS-style interface
+- Type / speak / record input
+- Audio transcription with Whisper
+- AI responses via OpenAI
+- Hindi and English support
+- Vercel-ready deployment structure
 
-Locally, you can set it in `.env.local`:
+## Local setup
 
-```
-OPENAI_API_KEY=sk-...
-```
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-Then run `npm run dev` to test locally.
+2. Create `.env.local` from `.env.example`:
+   ```bash
+   cp .env.example .env.local
+   ```
 
-Notes:
-- Never commit your real API key to the repository.
-- Monitor usage in your OpenAI dashboard to avoid unexpected charges.
+3. Add your OpenAI API key:
+   ```env
+   OPENAI_API_KEY=sk-your-key-here
+   ```
+
+4. Start the app:
+   ```bash
+   npm run dev
+   ```
+
+5. Open `http://localhost:3000`
+
+## Vercel deployment
+
+1. Push the repo to GitHub.
+2. Import the repo in Vercel.
+3. In Project Settings → Environment Variables, add:
+   - `OPENAI_API_KEY` = your OpenAI secret key
+4. Redeploy.
+
+## Security
+- Do not commit real API keys to GitHub.
+- Keep `.env.local` local only.
+- Use Vercel environment variables for production deployments.

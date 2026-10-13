@@ -11,7 +11,7 @@ const starterMessages: Message[] = [
   {
     role: 'assistant',
     content:
-      'Hello. I am JARVIS. Ask me anything, or speak using the microphone and I will respond with voice. You can record audio (Hindi/English) and I will transcribe using Whisper before replying.',
+      'Hello. I am JARVIS. I can answer in Hindi or English. Speak or type your request and I will respond with voice.',
   },
 ];
 
@@ -81,23 +81,22 @@ export default function HomePage() {
       const mediaRecorder = new MediaRecorder(stream);
       recordedChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      mediaRecorder.ondataavailable = (evt) => {
+        if (evt.data && evt.data.size > 0) recordedChunksRef.current.push(evt.data);
       };
 
       mediaRecorder.onstop = async () => {
         const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach((track) => track.stop());
         await sendAudio(blob);
-        // stop all tracks
-        stream.getTracks().forEach((t) => t.stop());
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setRecording(true);
     } catch (err) {
-      console.error('Recording error', err);
-      alert('Unable to access microphone.');
+      console.error('Recording error:', err);
+      alert('Unable to access the microphone. Please allow microphone permission and try again.');
     }
   };
 
@@ -107,36 +106,42 @@ export default function HomePage() {
   };
 
   const sendAudio = async (blob: Blob) => {
-    const userMessage: Message = { role: 'user', content: '[audio] Sent audio for transcription...' };
-    setMessages((m) => [...m, userMessage]);
+    const stagedUserMessage: Message = { role: 'user', content: '[audio] Audio captured for transcription...' };
+    setMessages((prev) => [...prev, stagedUserMessage]);
     setLoading(true);
 
     try {
-      const fd = new FormData();
-      fd.append('audio', blob, 'recording.webm');
-      fd.append('language', language);
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.webm');
+      formData.append('language', language);
 
       const res = await fetch('/api/voice', {
         method: 'POST',
-        body: fd,
+        body: formData,
       });
 
       const data = await res.json();
-      const reply = data.reply || 'I could not generate a reply.';
-      const transcript = data.transcript || '';
 
-      // Replace the last '[audio]' user message with the actual transcript
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to process audio.');
+      }
+
+      const transcript = data.transcript || '[audio]';
+      const reply = data.reply || 'I am ready and listening.';
+
       setMessages((prev) => {
         const copy = [...prev];
-        const lastIndex = copy.map((x) => x.content).lastIndexOf('[audio] Sent audio for transcription...');
-        if (lastIndex >= 0) copy[lastIndex] = { role: 'user', content: transcript || '[audio]' };
+        const lastIndex = copy.findLastIndex((item) => item.content === '[audio] Audio captured for transcription...');
+        if (lastIndex >= 0) {
+          copy[lastIndex] = { role: 'user', content: transcript || '[audio]' };
+        }
         return [...copy, { role: 'assistant', content: reply }];
       });
 
       speak(reply);
     } catch (err) {
-      console.error('Voice error', err);
-      setMessages((m) => [...m, { role: 'assistant', content: 'Failed to process audio.' }]);
+      console.error('Voice flow error:', err);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Audio processing failed. Please check your OpenAI key and try again.' }]);
     } finally {
       setLoading(false);
     }
@@ -164,16 +169,22 @@ export default function HomePage() {
       });
 
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Request failed.');
+      }
+
       const reply = data.reply || 'I am here and ready to help.';
-      const assistantMessage: Message = { role: 'assistant', content: reply };
-      setMessages([...nextMessages, assistantMessage]);
+      setMessages([...nextMessages, { role: 'assistant', content: reply }]);
       speak(reply);
     } catch (error) {
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: 'I could not reach the AI service. Please check the OpenAI key and environment configuration.',
-      };
-      setMessages([...nextMessages, assistantMessage]);
+      setMessages([
+        ...nextMessages,
+        {
+          role: 'assistant',
+          content:
+            'I could not reach the AI service. Please verify your OpenAI API key and environment variables.',
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -188,7 +199,7 @@ export default function HomePage() {
         </div>
         <div className="status-pill">
           <span className="status-dot" />
-          Online
+          ONLINE
         </div>
       </header>
 
@@ -212,17 +223,24 @@ export default function HomePage() {
         <form className="input-wrap" onSubmit={handleSubmit}>
           <input
             className="prompt-input"
-            aria-label="Enter prompt"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask JARVIS anything..."
+            aria-label="Chat prompt"
           />
 
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            aria-label="Language"
-            style={{ borderRadius: 12, padding: '8px 12px', minHeight: 56 }}
+            aria-label="Language selector"
+            style={{
+              minHeight: 56,
+              borderRadius: 12,
+              padding: '0 12px',
+              background: '#0d1a2a',
+              color: '#e7f4ff',
+              border: '1px solid rgba(117, 208, 255, 0.18)',
+            }}
           >
             <option value="hi">Hindi</option>
             <option value="en">English</option>
