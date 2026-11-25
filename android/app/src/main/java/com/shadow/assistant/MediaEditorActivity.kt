@@ -119,9 +119,10 @@ private object MediaTrimProcessor {
                 }
             }
             require(trackMap.isNotEmpty()) { "No supported audio or video tracks were found" }
-            muxer = MediaMuxer(outputPfd.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            trackMap.keys.forEach { index -> trackMap[index] = muxer.addTrack(extractor.getTrackFormat(index)) }
-            muxer.start()
+            val activeMuxer = MediaMuxer(outputPfd.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxer = activeMuxer
+            trackMap.keys.forEach { index -> trackMap[index] = activeMuxer.addTrack(extractor.getTrackFormat(index)) }
+            activeMuxer.start()
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
             val info = MediaCodec.BufferInfo()
@@ -141,13 +142,13 @@ private object MediaTrimProcessor {
                     info.size = size
                     info.presentationTimeUs = (time - firstTimestamp).coerceAtLeast(0)
                     info.flags = extractor.sampleFlags
-                    muxer.writeSampleData(trackMap.getValue(track), buffer, info)
+                    activeMuxer.writeSampleData(trackMap.getValue(track), buffer, info)
                     written = maxOf(written, info.presentationTimeUs)
                 }
                 extractor.advance()
             }
             require(written > 0L) { "No media samples were found in the selected time range" }
-            muxer.stop()
+            activeMuxer.stop()
             return trackMap.size to (written / 1_000_000.0)
         } finally {
             runCatching { muxer?.release() }
