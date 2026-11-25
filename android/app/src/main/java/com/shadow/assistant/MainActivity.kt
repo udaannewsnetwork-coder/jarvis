@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
     private var listening by mutableStateOf(false)
     private var sending by mutableStateOf(false)
     private var endpoint by mutableStateOf("")
+    private var responseLanguage by mutableStateOf("Auto")
     private var chatMessages by mutableStateOf(listOf<ChatMessage>())
     private var speechRecognizer: SpeechRecognizer? = null
 
@@ -85,7 +86,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        endpoint = getPreferences(MODE_PRIVATE).getString("backend_url", "").orEmpty()
+        val preferences = getPreferences(MODE_PRIVATE)
+        endpoint = preferences.getString("backend_url", "").orEmpty()
+        responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
+        chatMessages = loadSavedMessages(preferences.getString("chat_history", "[]").orEmpty())
+        if (chatMessages.isNotEmpty()) status = "Previous conversation restored"
         window.statusBarColor = android.graphics.Color.BLACK
         window.navigationBarColor = android.graphics.Color.BLACK
         setContent {
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity() {
                 status = status,
                 draft = draft,
                 endpoint = endpoint,
+                responseLanguage = responseLanguage,
                 messages = chatMessages,
                 listening = listening,
                 sending = sending,
@@ -100,6 +106,10 @@ class MainActivity : ComponentActivity() {
                 onEndpointChange = {
                     endpoint = it
                     getPreferences(MODE_PRIVATE).edit().putString("backend_url", it).apply()
+                },
+                onLanguageChange = {
+                    responseLanguage = it
+                    getPreferences(MODE_PRIVATE).edit().putString("response_language", it).apply()
                 },
                 onVoiceTap = { requestVoiceInput() },
                 onSend = { sendMessage() }
@@ -201,6 +211,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         chatMessages = updated
+        saveMessages(updated)
         draft = ""
         sending = true
         status = "SHADOW is thinking…"
@@ -221,7 +232,7 @@ class MainActivity : ComponentActivity() {
                             updated.forEach { message ->
                                 put(JSONObject().put("role", message.role).put("content", message.content))
                             }
-                        }).put("language", "hi")
+                        }).put("language", if (responseLanguage == "English") "en" else "hi")
                         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
                         val code = connection.responseCode
                         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -238,15 +249,40 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 chatMessages = chatMessages + ChatMessage("assistant", reply)
+                saveMessages(chatMessages)
                 status = "Connected • SHADOW replied"
             } catch (error: Exception) {
                 chatMessages = chatMessages.dropLast(1)
+                saveMessages(chatMessages)
                 draft = prompt
                 status = error.message?.take(180) ?: "Could not connect. Check your internet and backend URL."
             } finally {
                 sending = false
             }
         }
+    }
+
+    private fun saveMessages(messages: List<ChatMessage>) {
+        val json = JSONArray().apply {
+            messages.takeLast(30).forEach { message ->
+                put(JSONObject().put("role", message.role).put("content", message.content))
+            }
+        }
+        getPreferences(MODE_PRIVATE).edit().putString("chat_history", json.toString()).apply()
+    }
+
+    private fun loadSavedMessages(raw: String): List<ChatMessage> {
+        return runCatching {
+            val json = JSONArray(raw)
+            (0 until json.length()).mapNotNull { index ->
+                val item = json.optJSONObject(index) ?: return@mapNotNull null
+                val role = item.optString("role")
+                val content = item.optString("content")
+                if ((role == "user" || role == "assistant") && content.isNotBlank() && content.length <= 6000) {
+                    ChatMessage(role, content)
+                } else null
+            }.takeLast(30)
+        }.getOrDefault(emptyList())
     }
 
     override fun onDestroy() {
@@ -265,11 +301,13 @@ private fun ShadowHome(
     status: String,
     draft: String,
     endpoint: String,
+    responseLanguage: String,
     messages: List<ChatMessage>,
     listening: Boolean,
     sending: Boolean,
     onDraftChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
+    onLanguageChange: (String) -> Unit,
     onVoiceTap: () -> Unit,
     onSend: () -> Unit
 ) {
@@ -344,8 +382,26 @@ private fun ShadowHome(
                     }
                 }
 
-                Text(status, color = Color(0xFF91A4BD), fontSize = 11.sp, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("RESPONSE LANGUAGE", color = Color(0xFF91A4BD), fontSize = 9.sp, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("Auto", "Hindi", "English").forEach { option ->
+                            Surface(
+                                color = if (responseLanguage == option) Color(0xFF173B63) else Color(0xFF101B2B),
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier.clickable { onLanguageChange(option) }
+                            ) {
+                                Text(option, color = if (responseLanguage == option) Ice else Color(0xFF91A4BD),
+                                    fontSize = 10.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = endpoint,
                     onValueChange = onEndpointChange,
