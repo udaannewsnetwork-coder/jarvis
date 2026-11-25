@@ -28,12 +28,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -43,16 +50,30 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
+
+private data class ChatMessage(val role: String, val content: String)
 
 class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("Your assistant is standing by")
-    private var recognizedText by mutableStateOf("")
+    private var draft by mutableStateOf("")
     private var listening by mutableStateOf(false)
+    private var sending by mutableStateOf(false)
+    private var endpoint by mutableStateOf("")
+    private var chatMessages by mutableStateOf(listOf<ChatMessage>())
     private var speechRecognizer: SpeechRecognizer? = null
 
     private val microphonePermission = registerForActivityResult(
@@ -64,14 +85,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        endpoint = getPreferences(MODE_PRIVATE).getString("backend_url", "").orEmpty()
         window.statusBarColor = android.graphics.Color.BLACK
         window.navigationBarColor = android.graphics.Color.BLACK
         setContent {
             ShadowHome(
                 status = status,
-                recognizedText = recognizedText,
+                draft = draft,
+                endpoint = endpoint,
+                messages = chatMessages,
                 listening = listening,
-                onVoiceTap = { requestVoiceInput() }
+                sending = sending,
+                onDraftChange = { draft = it },
+                onEndpointChange = {
+                    endpoint = it
+                    getPreferences(MODE_PRIVATE).edit().putString("backend_url", it).apply()
+                },
+                onVoiceTap = { requestVoiceInput() },
+                onSend = { sendMessage() }
             )
         }
     }
@@ -128,8 +159,8 @@ class MainActivity : ComponentActivity() {
                             ?.firstOrNull()
                             .orEmpty()
                         if (phrase.isNotBlank()) {
-                            recognizedText = phrase
-                            status = "Voice captured • AI connection is the next step"
+                            draft = phrase
+                            status = "Voice captured • review and tap Send"
                         } else {
                             status = "No speech detected. Please try again."
                         }
@@ -151,6 +182,73 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun sendMessage() {
+        val prompt = draft.trim()
+        val baseUrl = endpoint.trim().trimEnd('/')
+        if (prompt.isBlank() || sending) return
+        if (!baseUrl.startsWith("https://")) {
+            status = "Add your deployed HTTPS backend URL below before chatting"
+            return
+        }
+        if (prompt.length > 6000) {
+            status = "Message is too long. Keep it under 6,000 characters."
+            return
+        }
+
+        val updated = chatMessages + ChatMessage("user", prompt)
+        if (updated.size > 30) {
+            status = "Chat limit reached. Start a new chat to continue."
+            return
+        }
+        chatMessages = updated
+        draft = ""
+        sending = true
+        status = "SHADOW is thinking…"
+
+        lifecycleScope.launch {
+            try {
+                val reply = withContext(Dispatchers.IO) {
+                    val connection = (URL(baseUrl + "/api/chat").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 15000
+                        readTimeout = 30000
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    try {
+                        val payload = JSONObject().put("messages", JSONArray().apply {
+                            updated.forEach { message ->
+                                put(JSONObject().put("role", message.role).put("content", message.content))
+                            }
+                        }).put("language", "hi")
+                        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                        val code = connection.responseCode
+                        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        val json = runCatching { JSONObject(response) }.getOrNull()
+                        if (code !in 200..299) {
+                            throw IllegalStateException(json?.optString("error")?.takeIf { it.isNotBlank() }
+                                ?: "Server error ($code). Check backend setup.")
+                        }
+                        json?.optString("reply")?.takeIf { it.isNotBlank() }
+                            ?: throw IllegalStateException("The server returned an empty reply.")
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+                chatMessages = chatMessages + ChatMessage("assistant", reply)
+                status = "Connected • SHADOW replied"
+            } catch (error: Exception) {
+                chatMessages = chatMessages.dropLast(1)
+                draft = prompt
+                status = error.message?.take(180) ?: "Could not connect. Check your internet and backend URL."
+            } finally {
+                sending = false
+            }
+        }
+    }
+
     override fun onDestroy() {
         speechRecognizer?.destroy()
         speechRecognizer = null
@@ -165,73 +263,128 @@ private val Ice = Color(0xFF8BD8FF)
 @Composable
 private fun ShadowHome(
     status: String,
-    recognizedText: String,
+    draft: String,
+    endpoint: String,
+    messages: List<ChatMessage>,
     listening: Boolean,
-    onVoiceTap: () -> Unit
+    sending: Boolean,
+    onDraftChange: (String) -> Unit,
+    onEndpointChange: (String) -> Unit,
+    onVoiceTap: () -> Unit,
+    onSend: () -> Unit
 ) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = Night) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Brush.verticalGradient(listOf(Color.Black, Night, Color(0xFF071323))))
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 26.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().weight(0.12f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("S", color = Ice, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Text("  S H A D O W", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp)
+                    Text("S", color = Ice, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("  S H A D O W", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text(if (listening) "● LISTENING" else if (sending) "● THINKING" else "● READY",
+                        color = if (listening || sending) Ice else Color(0xFF73D6A6), fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (messages.isEmpty()) {
                         Spacer(Modifier.weight(1f))
-                        Text(if (listening) "● LISTENING" else "● READY", color = if (listening) Ice else Color(0xFF73D6A6), fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                    Column(
-                        modifier = Modifier.weight(0.76f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
                         Text("YOUR PERSONAL AI", color = Color(0xFF7F9DBD), fontSize = 10.sp, letterSpacing = 3.sp)
-                        Spacer(Modifier.height(14.dp))
-                        Text("I'm here.\nWhat shall we do?", color = Color(0xFFF1F6FF), fontSize = 27.sp, lineHeight = 34.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(8.dp))
+                        Text("I'm here.\nWhat shall we do?", color = Color(0xFFF1F6FF), fontSize = 26.sp,
+                            lineHeight = 34.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
                         ShadowOrb(listening = listening, onClick = onVoiceTap)
-                        Text(if (listening) "LISTENING — TAP TO STOP" else "TAP THE ORB TO SPEAK", color = Ice, fontSize = 10.sp, letterSpacing = 2.sp)
-                        Spacer(Modifier.height(10.dp))
+                        Text(if (listening) "LISTENING — TAP TO STOP" else "TAP THE ORB TO SPEAK",
+                            color = Ice, fontSize = 10.sp, letterSpacing = 2.sp)
+                        Spacer(Modifier.height(8.dp))
                         Text(status, color = Color(0xFF91A4BD), fontSize = 12.sp, textAlign = TextAlign.Center)
-                        if (recognizedText.isNotBlank()) {
-                            Spacer(Modifier.height(12.dp))
-                            Surface(color = Color(0xFF101B2B), shape = RoundedCornerShape(16.dp)) {
-                                Text(
-                                    recognizedText,
-                                    color = Color(0xFFE2EEFF),
-                                    fontSize = 14.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                                )
+                        Spacer(Modifier.weight(1f))
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            state = listState,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(messages) { message ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = if (message.role == "user") Arrangement.End else Arrangement.Start
+                                ) {
+                                    Surface(
+                                        color = if (message.role == "user") Color(0xFF12345A) else Color(0xFF101B2B),
+                                        shape = RoundedCornerShape(18.dp),
+                                        modifier = Modifier.fillMaxWidth(0.88f)
+                                    ) {
+                                        Column(Modifier.padding(14.dp)) {
+                                            Text(if (message.role == "user") "YOU" else "SHADOW",
+                                                color = Ice, fontSize = 9.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(Modifier.height(5.dp))
+                                            Text(message.content, color = Color(0xFFE2EEFF), fontSize = 14.sp, lineHeight = 21.sp)
+                                        }
+                                    }
+                                }
+                            }
+                            if (sending) item {
+                                Text("SHADOW is thinking…", color = Ice, fontSize = 12.sp, modifier = Modifier.padding(8.dp))
                             }
                         }
                     }
-                    Column(
-                        modifier = Modifier.weight(0.16f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Surface(color = Color(0xFF101B2B), shape = RoundedCornerShape(28.dp)) {
-                            Text(
-                                "   🎙     Voice input is ready       ",
-                                color = Color(0xFFBBD7F3),
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp)
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("PRIVATE BY DESIGN  •  YOU ARE IN CONTROL", color = Color(0xFF52647A), fontSize = 8.sp, letterSpacing = 1.sp)
-                    }
                 }
+
+                Text(status, color = Color(0xFF91A4BD), fontSize = 11.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
+                OutlinedTextField(
+                    value = endpoint,
+                    onValueChange = onEndpointChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Backend URL (HTTPS)") },
+                    placeholder = { Text("https://your-shadow-server.example") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 12.sp)
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onVoiceTap,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF132A46)),
+                        modifier = Modifier.height(54.dp)
+                    ) { Text(if (listening) "Stop" else "🎙", color = Ice) }
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = onDraftChange,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("Message SHADOW…") },
+                        maxLines = 3,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp)
+                    )
+                    Button(
+                        onClick = onSend,
+                        enabled = !sending && draft.isNotBlank(),
+                        modifier = Modifier.height(54.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Blue)
+                    ) { Text("Send", color = Color.White) }
+                }
+                Text("PRIVATE BY DESIGN • REVIEW VOICE TEXT BEFORE SENDING",
+                    color = Color(0xFF52647A), fontSize = 8.sp, letterSpacing = 0.8.sp,
+                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
     }
@@ -248,9 +401,9 @@ private fun ShadowOrb(listening: Boolean, onClick: () -> Unit) {
     )
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(270.dp).clickable(onClick = onClick)
+        modifier = Modifier.size(240.dp).clickable(onClick = onClick)
     ) {
-        Canvas(Modifier.size(250.dp)) {
+        Canvas(Modifier.size(230.dp)) {
             val center = this.center
             drawCircle(Blue.copy(alpha = if (listening) 0.14f else 0.07f), radius = size.minDimension * 0.46f)
             drawCircle(Blue.copy(alpha = 0.22f), radius = size.minDimension * 0.39f, style = Stroke(width = 1.2.dp.toPx()))
