@@ -30,5 +30,11 @@ SHADOW is a personal AI agent project, separate from SWASTHYA SAATHI. The produc
 - Test on a real Android device before describing a build as device-tested.
 - Use a user-owned signing key for release builds; never commit the key or passwords.
 
-## Current verified scope
-The development branch contains a native Kotlin/Jetpack Compose Android scaffold and a basic Android speech-recognition flow. The current voice flow displays recognized text but is not yet connected to the AI backend. GitHub Actions run 45523247995 completed successfully for the foundation commit; this is CI evidence only, not physical-device testing or proof that every planned feature is implemented.
+## Current implementation (verification status matters)
+- Native Kotlin/Jetpack Compose app scaffold with SHADOW branding and animated orb.
+- Microphone permission-gated speech recognition; recognized text is shown for review before sending.
+- Chat UI posts to a configurable HTTPS backend URL; backend deployment and AI credentials are still required.
+- Local chat history and response-language preference are stored in app-private preferences.
+- On-device Android TextToSpeech prototype supports optional automatic spoken replies and a read-last/stop control. Voice quality and Hindi/English language availability depend on the device's installed TTS engine.
+- Latest voice/TTS and history changes are committed to the development branch. Their GitHub Actions build is pending; do not treat them as build-verified until the latest run succeeds.
+- Earlier foundation run 45523857759 passed CI. This is not physical-device testing or proof that every planned feature is implemented.
