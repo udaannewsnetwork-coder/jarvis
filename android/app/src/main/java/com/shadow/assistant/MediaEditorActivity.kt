@@ -137,10 +137,14 @@ private object MediaTrimProcessor {
         try {
             extractor.setDataSource(inputPfd.fileDescriptor)
             val trackMap = mutableMapOf<Int, Int>()
+            var maxSampleSize = 2 * 1024 * 1024
             for (i in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(i)
                 val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
                 if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                    if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                        maxSampleSize = maxOf(maxSampleSize, format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE).coerceAtMost(16 * 1024 * 1024))
+                    }
                     extractor.selectTrack(i)
                     trackMap[i] = -1
                 }
@@ -151,7 +155,7 @@ private object MediaTrimProcessor {
             trackMap.keys.forEach { index -> trackMap[index] = activeMuxer.addTrack(extractor.getTrackFormat(index)) }
             activeMuxer.start()
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-            val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
+            val buffer = ByteBuffer.allocate(maxSampleSize)
             val info = MediaCodec.BufferInfo()
             var firstTimestamp = -1L
             var written = 0L
