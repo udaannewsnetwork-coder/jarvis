@@ -10,7 +10,7 @@ const MAX_TOTAL_FILE_CHARS = 40000;
 
 function safeProjectPath(value: unknown): value is string {
   if (typeof value !== "string" || value.length < 1 || value.length > 160) return false;
-  if (value.startsWith("/") || value.includes("\\\\" ) || value.includes("..")) return false;
+  if (value.startsWith("/") || value.includes(String.fromCharCode(92)) || value.includes("..")) return false;
   return /^[a-zA-Z0-9._/-]+$/.test(value) && !value.split("/").some((part) => !part || part === "." || part === "..");
 }
 
@@ -63,9 +63,9 @@ export async function POST(request: NextRequest) {
     const projectName = String(generated.projectName || "shadow-project").slice(0, 80);
     const summary = String(generated.summary || "Starter project generated.").slice(0, 1000);
     const stack = Array.isArray(generated.stack) ? generated.stack.slice(0, 8).map((x: unknown) => String(x).slice(0, 80)) : [];
-    const tree = files.map((file) => "  " + file.path).join("\\n");
-    const source = files.map((file) => "### " + file.path + "\\n\\n" + String.fromCharCode(96,96,96) + "\\n" + file.content + "\\n" + String.fromCharCode(96,96,96)).join("\\n\\n");
-    const reply = ["SHADOW BUILDER • SOURCE PREVIEW", "", "Project: " + projectName, "Summary: " + summary, "Stack: " + (stack.join(", ") || "Not specified"), "", "FILE TREE", tree, "", "GENERATED SOURCE FILES", source, "", "NEXT STEP: This is a source preview. SHADOW has not saved these files to your phone, run the project, or built an APK yet. Project export and build automation are future steps."].join("\\n");
+    const tree = files.map((file) => "  " + file.path).join("\n");
+    const source = files.map((file) => "### " + file.path + "\n\n" + String.fromCharCode(96,96,96) + "\n" + file.content + "\n" + String.fromCharCode(96,96,96)).join("\n\n");
+    const reply = ["SHADOW BUILDER • SOURCE PREVIEW", "", "Project: " + projectName, "Summary: " + summary, "Stack: " + (stack.join(", ") || "Not specified"), "", "FILE TREE", tree, "", "GENERATED SOURCE FILES", source, "", "NEXT STEP: This is a source preview. SHADOW has not saved these files to your phone, run the project, or built an APK yet. Project export and build automation are future steps."].join("\n");
     return Response.json({ projectName, summary, stack, files, reply });
   } catch (error) {
     console.error("SHADOW builder route error:", error);
