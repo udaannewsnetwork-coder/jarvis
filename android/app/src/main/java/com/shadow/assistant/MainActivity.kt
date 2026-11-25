@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
     private var chatMessages by mutableStateOf(listOf<ChatMessage>())
+    private var savedMemories by mutableStateOf(listOf<String>())
     private var speechRecognizer: SpeechRecognizer? = null
 
     private val microphonePermission = registerForActivityResult(
@@ -126,6 +127,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         chatMessages = loadSavedMessages(preferences.getString("chat_history", "[]").orEmpty())
+        savedMemories = loadSavedMemories(preferences.getString("saved_memories", "[]").orEmpty())
         if (chatMessages.isNotEmpty()) status = "Previous conversation restored"
         window.statusBarColor = android.graphics.Color.BLACK
         window.navigationBarColor = android.graphics.Color.BLACK
@@ -138,6 +140,7 @@ class MainActivity : ComponentActivity() {
                 voiceReplies = voiceReplies,
                 speaking = speaking,
                 messages = chatMessages,
+                memories = savedMemories,
                 listening = listening,
                 sending = sending,
                 onDraftChange = { draft = it },
@@ -158,6 +161,8 @@ class MainActivity : ComponentActivity() {
                 onSpeakLatest = { speakLatestReply() },
                 onStopSpeaking = { stopSpeaking() },
                 onClearChat = { clearConversation() },
+                onAddMemory = { addMemory(it) },
+                onDeleteMemory = { deleteMemory(it) },
                 onVoiceTap = { requestVoiceInput() },
                 onSend = { sendMessage() },
                 onResearch = { researchWeb() }
@@ -279,7 +284,7 @@ class MainActivity : ComponentActivity() {
                         setRequestProperty("Accept", "application/json")
                     }
                     try {
-                        val payload = JSONObject().put("messages", JSONArray().apply {
+                        val payload = JSONObject().put("memories", JSONArray().apply { savedMemories.forEach { put(it) } }).put("messages", JSONArray().apply {
                             updated.forEach { message ->
                                 put(JSONObject().put("role", message.role).put("content", message.content))
                             }
@@ -392,6 +397,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun addMemory(value: String) {
+        val memory = value.trim().take(300)
+        if (memory.isBlank()) return
+        if (savedMemories.any { it.equals(memory, ignoreCase = true) }) {
+            status = "This memory is already saved"
+            return
+        }
+        savedMemories = (savedMemories + memory).takeLast(30)
+        getPreferences(MODE_PRIVATE).edit().putString("saved_memories", JSONArray(savedMemories).toString()).apply()
+        status = "Memory saved on this device"
+    }
+
+    private fun deleteMemory(value: String) {
+        savedMemories = savedMemories.filterNot { it == value }
+        getPreferences(MODE_PRIVATE).edit().putString("saved_memories", JSONArray(savedMemories).toString()).apply()
+        status = "Memory deleted from this device"
+    }
+
+    private fun loadSavedMemories(raw: String): List<String> {
+        return runCatching {
+            val json = JSONArray(raw)
+            (0 until json.length()).mapNotNull { index ->
+                json.optString(index).takeIf { it.isNotBlank() && it.length <= 300 }
+            }.takeLast(30)
+        }.getOrDefault(emptyList())
+    }
+
     private fun clearConversation() {
         chatMessages = emptyList()
         saveMessages(emptyList())
@@ -481,6 +513,7 @@ private fun ShadowHome(
     voiceReplies: Boolean,
     speaking: Boolean,
     messages: List<ChatMessage>,
+    memories: List<String>,
     listening: Boolean,
     sending: Boolean,
     onDraftChange: (String) -> Unit,
@@ -490,12 +523,16 @@ private fun ShadowHome(
     onSpeakLatest: () -> Unit,
     onStopSpeaking: () -> Unit,
     onClearChat: () -> Unit,
+    onAddMemory: (String) -> Unit,
+    onDeleteMemory: (String) -> Unit,
     onVoiceTap: () -> Unit,
     onSend: () -> Unit,
     onResearch: () -> Unit
 ) {
     val listState = rememberLazyListState()
     var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var showMemoryDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var memoryDraft by androidx.compose.runtime.remember { mutableStateOf("") }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -519,6 +556,8 @@ private fun ShadowHome(
                             fontSize = 7.sp, letterSpacing = 1.35.sp)
                     }
                     Spacer(Modifier.weight(1f))
+                    Text("MEMORY", color = Ice, fontSize = 9.sp,
+                        modifier = Modifier.clickable { showMemoryDialog = true }.padding(horizontal = 8.dp, vertical = 6.dp))
                     if (messages.isNotEmpty()) {
                         Text("CLEAR", color = Color(0xFFFF9A9A), fontSize = 9.sp,
                             modifier = Modifier.clickable { showClearConfirmation = true }.padding(horizontal = 8.dp, vertical = 6.dp))
@@ -668,6 +707,42 @@ private fun ShadowHome(
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
+    }
+    if (showMemoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showMemoryDialog = false },
+            title = { Text("SHADOW Memory") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Only facts you add here are saved on this device and shared with SHADOW during chat.", color = Color(0xFFB8C9DD), fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = memoryDraft,
+                        onValueChange = { memoryDraft = it.take(300) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Example: I prefer explanations in Hinglish") },
+                        maxLines = 3
+                    )
+                    Text("SAVED MEMORIES (${memories.size}/30)", color = Ice, fontSize = 10.sp)
+                    if (memories.isEmpty()) Text("No saved memories yet.", color = Color(0xFFB8C9DD), fontSize = 12.sp)
+                    memories.forEach { memory ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(memory, color = Color(0xFFE2EEFF), fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { onDeleteMemory(memory) }) { Text("DELETE", color = Color(0xFFFF9A9A), fontSize = 10.sp) }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onAddMemory(memoryDraft)
+                    memoryDraft = ""
+                }, enabled = memoryDraft.isNotBlank() && memories.size < 30) { Text("SAVE MEMORY") }
+            },
+            dismissButton = { TextButton(onClick = { showMemoryDialog = false }) { Text("CLOSE") } },
+            containerColor = Color(0xFF101B2B),
+            titleContentColor = Color.White,
+            textContentColor = Color(0xFFB8C9DD)
+        )
     }
     if (showClearConfirmation) {
         AlertDialog(
