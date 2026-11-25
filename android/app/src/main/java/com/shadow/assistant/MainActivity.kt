@@ -262,7 +262,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         val baseUrl = endpoint.trim().trimEnd('/')
-        if (prompt.isBlank() || sending) return
+        if (messageText.isBlank() || sending) return
         if (!baseUrl.startsWith("https://")) {
             status = "Add your deployed HTTPS backend URL below before chatting"
             return
