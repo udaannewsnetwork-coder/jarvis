@@ -16,9 +16,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import android.widget.VideoView
+import android.widget.MediaController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -30,13 +33,15 @@ class MediaEditorActivity : ComponentActivity() {
     private var endSeconds by mutableStateOf("")
     private var status by mutableStateOf("Import a local audio or video file to begin.")
     private var busy by mutableStateOf(false)
+    private var previewDurationMs by mutableStateOf(0)
 
     private val pickSource = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             source = uri
-            status = "Media selected. Enter the trim range and export."
+            status = "Media selected. Preview it, set the trim range and export."
             endSeconds = ""
+            previewDurationMs = 0
         }
     }
     private val createOutput = registerForActivityResult(ActivityResultContracts.CreateDocument("video/mp4")) { uri ->
@@ -63,7 +68,27 @@ class MediaEditorActivity : ComponentActivity() {
                     Button(onClick = { pickSource.launch(arrayOf("video/*", "audio/*")) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text("IMPORT AUDIO / VIDEO")
                     }
-                    Text(if (source == null) "No media selected" else "Media selected • URI access granted where supported", color = Color(0xFF8BD8FF))
+                    Text(if (source == null) "No media selected" else "Media selected • local preview available", color = Color(0xFF8BD8FF))
+                    source?.let { selected ->
+                        key(selected) {
+                            AndroidView(
+                                modifier = Modifier.fillMaxWidth().height(210.dp),
+                                factory = { context ->
+                                    VideoView(context).apply {
+                                        val controls = MediaController(context)
+                                        controls.setAnchorView(this)
+                                        setMediaController(controls)
+                                        setVideoURI(selected)
+                                        setOnPreparedListener { player ->
+                                            previewDurationMs = player.duration.coerceAtLeast(0)
+                                            if (previewDurationMs > 0) endSeconds = String.format(Locale.US, "%.2f", previewDurationMs / 1000.0)
+                                            status = "Preview ready • duration ${previewDurationMs / 1000}s"
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
                     OutlinedTextField(value = startSeconds, onValueChange = { startSeconds = it.filter { c -> c.isDigit() || c == '.' }.take(8) },
                         label = { Text("Start time (seconds)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(value = endSeconds, onValueChange = { endSeconds = it.filter { c -> c.isDigit() || c == '.' }.take(8) },
