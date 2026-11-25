@@ -429,7 +429,7 @@ class MainActivity : ComponentActivity() {
         val command = prompt.trim()
         val lower = command.lowercase(Locale.ROOT)
         val response = when {
-            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/build <app idea> — generate a starter project source preview\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands"
+            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/build <app idea> — generate a starter project source preview\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands\n\nVOICE COMMANDS (background listening)\n“Shadow, what time is it” — current time\n“Shadow, battery status” — battery level\n“Shadow, set timer for 5 minutes” — timer notification\n“Shadow, remind me in 20 minutes to drink water” — reminder\n“Shadow, volume up/down” — media volume\n“Shadow, open YouTube” — tap OPEN in notification\n“Shadow, search weather tomorrow” — tap OPEN in notification"
             lower == "/memories" -> if (savedMemories.isEmpty()) {
                 "No saved memories yet. Use /remember <fact> to save one."
             } else {
