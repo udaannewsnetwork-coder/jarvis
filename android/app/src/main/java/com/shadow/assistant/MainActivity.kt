@@ -134,7 +134,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val preferences = getPreferences(MODE_PRIVATE)
         endpoint = preferences.getString("backend_url", "").orEmpty().ifBlank { "https://shadow-ai-api.udaannewsnetwork.workers.dev" }
-        apiToken = preferences.getString("cloud_ai_token", "").orEmpty()
+        val legacyToken = preferences.getString("cloud_ai_token", "").orEmpty()
+        apiToken = SecureTokenStore.read(this) ?: legacyToken.also { token ->
+            if (token.isNotBlank()) runCatching { SecureTokenStore.write(this, token) }
+        }
+        if (legacyToken.isNotBlank()) preferences.edit().remove("cloud_ai_token").apply()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
         voiceReplies = preferences.getBoolean("voice_replies", false)
         backgroundWakeEnabled = getSharedPreferences(BackgroundWakeService.PREFS, MODE_PRIVATE).getBoolean(BackgroundWakeService.KEY_ENABLED, false)
@@ -194,7 +198,8 @@ class MainActivity : ComponentActivity() {
                 },
                 onApiTokenChange = {
                     apiToken = it
-                    getPreferences(MODE_PRIVATE).edit().putString("cloud_ai_token", it).apply()
+                    runCatching { SecureTokenStore.write(this, it) }
+                        .onFailure { status = "Secure token storage unavailable on this device" }
                 },
                 onLanguageChange = {
                     responseLanguage = it
