@@ -61,7 +61,7 @@ internal data class ExternalPlugin(
             val description = json.optString("description").take(240)
             val base = json.getString("base_url").trim().trimEnd('/')
             require(id.matches(Regex("[a-z][a-z0-9_]{2,39}"))) { "Invalid plugin ID" }
-            require(name.length in 2..40) { "Plugin name must be 2–40 characters" }
+            require(name.length in 2..40) { "Skill name must be 2–40 characters" }
             val baseUri = URI(base)
             require(baseUri.scheme == "https" && !baseUri.host.isNullOrBlank() && baseUri.userInfo == null &&
                 baseUri.query == null && baseUri.fragment == null) { "Plugin base URL must be a clean HTTPS URL" }
@@ -108,8 +108,8 @@ internal fun PluginHubScreen(
     var showImportHelp by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth().padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("PLUGIN HUB", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("Compatible HTTPS APIs ko manifest URL se connect karo. SHADOW sirf declared POST actions call karega; downloaded code/APK execute nahi hoga.",
+        Text("SKILL HUB", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Trusted skill services ko HTTPS manifest URL se connect karo. SHADOW declared actions call karega; downloaded code/APK kabhi execute nahi hoga.",
             color = Color(0xFFB9CBE1), fontSize = 11.sp)
         Text("BUILT-IN TOOLS", color = Color(0xFF8BD8FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
         listOf(
@@ -126,16 +126,16 @@ internal fun PluginHubScreen(
                 }
             }
         }
-        Text("CONNECT A CUSTOM PLUGIN", color = Color(0xFF8BD8FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("INSTALL A SKILL PACK", color = Color(0xFF8BD8FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
         OutlinedTextField(value = manifestUrl, onValueChange = { manifestUrl = it.take(500) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Plugin manifest HTTPS URL") })
+            modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Skill manifest HTTPS URL") })
         OutlinedTextField(value = bearerToken, onValueChange = { bearerToken = it.take(2000) }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), label = { Text("Bearer token (optional)") })
         Button(onClick = { onImport(manifestUrl.trim(), bearerToken.trim()) }, enabled = !busy && manifestUrl.startsWith("https://"),
             modifier = Modifier.fillMaxWidth()) { Text(if (busy) "CONNECTING…" else "FETCH & CONNECT") }
         Text("Manifest format: JSON v1 with plugin id, name, base_url and actions (POST only).",
             color = Color(0xFF91A4BD), fontSize = 9.sp)
         if (plugins.isNotEmpty()) {
-            Text("CONNECTED PLUGINS • ${plugins.size}", color = Color(0xFF8BD8FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text("INSTALLED SKILLS • ${plugins.size}", color = Color(0xFF8BD8FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
             plugins.forEach { plugin ->
                 Surface(color = Color(0xFF0A1B31), shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, Color(0xFF167DCA)), modifier = Modifier.fillMaxWidth()) {
