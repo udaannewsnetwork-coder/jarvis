@@ -231,7 +231,8 @@ class MainActivity : ComponentActivity() {
                 externalPlugins = externalPlugins, pluginStatus = status, pluginBusy = pluginBusy,
                 onImportPlugin = { url, token -> importExternalPlugin(url, token) },
                 onRunPlugin = { id, actionId, payload -> runExternalPluginAction(id, actionId, payload) },
-                onDisconnectPlugin = { id -> disconnectExternalPlugin(id) }
+                onDisconnectPlugin = { id -> disconnectExternalPlugin(id) },
+                onOpenMediaEditor = { startActivity(Intent(this, MediaEditorActivity::class.java)) }
             )
         }
     }
@@ -962,7 +963,7 @@ private fun ShadowHome(
  onAddMemory:(String)->Unit,onDeleteMemory:(String)->Unit,onVoiceTap:()->Unit,onSend:()->Unit,onResearch:()->Unit,
  hasExportableProject:Boolean,projectFiles:List<ProjectFile>,onExportProject:()->Unit,onSaveProjectFile:(String,String)->Unit,onCheckProject:()->String,
  externalPlugins:List<ExternalPlugin>,pluginStatus:String,pluginBusy:Boolean,
- onImportPlugin:(String,String)->Unit,onRunPlugin:(String,String,String)->Unit,onDisconnectPlugin:(String)->Unit
+ onImportPlugin:(String,String)->Unit,onRunPlugin:(String,String,String)->Unit,onDisconnectPlugin:(String)->Unit,onOpenMediaEditor:()->Unit
 ) {
  val listState=rememberLazyListState()
  var selectedTab by androidx.compose.runtime.remember { mutableStateOf("Home") }
@@ -1045,6 +1046,7 @@ private fun ShadowHome(
       Text("Describe an app or website. SHADOW will generate a starter project with editable source files.",color=Color(0xFFB9CBE1),fontSize=13.sp)
       ActionTile("PROJECT BUILDER","Generate source files","</>",Modifier.fillMaxWidth()) { if(!draft.startsWith("/build ")) onDraftChange("/build ") }
       ActionTile("AI CREATOR PLANNER","Script • storyboard • edit plan","▶",Modifier.fillMaxWidth()) { if(!draft.startsWith("/creator ")) onDraftChange("/creator ") }
+      ActionTile("LOCAL MEDIA LAB","Import • trim • export MP4","✂",Modifier.fillMaxWidth(), onOpenMediaEditor)
       if(hasExportableProject) {
        Text("${projectFiles.size} project files available",color=Ice,fontSize=12.sp)
        Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
