@@ -12,6 +12,10 @@ import android.speech.tts.UtteranceProgressListener
 import android.text.util.Linkify
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,6 +75,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.ByteArrayInputStream
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -188,7 +193,8 @@ class MainActivity : ComponentActivity() {
                 hasExportableProject = generatedProjectJson.isNotBlank(),
                 projectFiles = projectFiles,
                 onExportProject = { exportProjectLauncher.launch("${generatedProjectName}.zip") },
-                onSaveProjectFile = { path, content -> saveProjectFile(path, content) }
+                onSaveProjectFile = { path, content -> saveProjectFile(path, content) },
+                onCheckProject = { validateProjectSource() }
             )
         }
     }
@@ -482,6 +488,36 @@ class MainActivity : ComponentActivity() {
         }.take(10)
     }.getOrDefault(emptyList())
 
+    private fun validateProjectSource(): String {
+        if (projectFiles.size !in 2..10) return "FAIL • Project must contain 2–10 files."
+        val paths = projectFiles.map { it.path }
+        if (paths.toSet().size != paths.size) return "FAIL • Duplicate file paths found."
+        if (projectFiles.sumOf { it.content.length } > 40000) return "FAIL • Project is over the 40,000 character limit."
+        val unsafe = projectFiles.firstOrNull { file ->
+            file.path.isBlank() || file.path.length > 160 || file.path.startsWith("/") ||
+                file.path.contains(92.toChar()) || file.path.contains("..") ||
+                !file.path.matches(Regex("[a-zA-Z0-9._/-]+")) ||
+                file.path.split("/").any { it.isBlank() || it == "." || it == ".." } ||
+                file.content.length > 12000
+        }
+        if (unsafe != null) return "FAIL • Unsafe path or oversized file: " + unsafe.path
+        val packageFile = projectFiles.firstOrNull { it.path == "package.json" }
+        if (packageFile != null) {
+            try {
+                val packageJson = JSONObject(packageFile.content)
+                if (packageJson.optString("name").isBlank()) return "WARNING • package.json is valid JSON but has no project name."
+            } catch (_: Exception) {
+                return "FAIL • package.json contains invalid JSON."
+            }
+        }
+        val htmlFiles = projectFiles.count { it.path.endsWith(".html", true) || it.path.endsWith(".htm", true) }
+        val notes = mutableListOf("PASS • File count, paths and source-size limits.")
+        if (packageFile != null) notes.add("PASS • package.json is valid JSON.")
+        if (htmlFiles > 0) notes.add("PASS • HTML preview is available for " + htmlFiles + " file(s).")
+        notes.add("INFO • Static checks only; no code execution, dependency install, compiler or APK build was run.")
+        return notes.joinToString("\n")
+    }
+
     private fun saveProjectFile(path: String, content: String) {
         if (content.length > 12000) { status = "File is too large to save (12,000 character limit)"; return }
         val updatedFiles = projectFiles.map { file -> if (file.path == path) file.copy(content = content) else file }
@@ -746,7 +782,8 @@ private fun ShadowHome(
     hasExportableProject: Boolean,
     projectFiles: List<ProjectFile>,
     onExportProject: () -> Unit,
-    onSaveProjectFile: (String, String) -> Unit
+    onSaveProjectFile: (String, String) -> Unit,
+    onCheckProject: () -> String
 ) {
     val listState = rememberLazyListState()
     var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
@@ -755,6 +792,9 @@ private fun ShadowHome(
     var showWorkspaceDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
     var selectedProjectPath by androidx.compose.runtime.remember { mutableStateOf("") }
     var projectFileDraft by androidx.compose.runtime.remember { mutableStateOf("") }
+    var projectCheckReport by androidx.compose.runtime.remember { mutableStateOf("") }
+    var showPreviewDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var previewHtml by androidx.compose.runtime.remember { mutableStateOf("") }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -975,10 +1015,17 @@ private fun ShadowHome(
                     }
                     if (selectedProjectPath.isNotBlank()) {
                         Text("EDITING: " + selectedProjectPath, color = Ice, fontSize = 10.sp)
+                        if (selectedProjectPath.endsWith(".html", true) || selectedProjectPath.endsWith(".htm", true)) {
+                            TextButton(onClick = { previewHtml = projectFileDraft; showPreviewDialog = true }) { Text("PREVIEW HTML") }
+                        }
                         OutlinedTextField(value = projectFileDraft, onValueChange = { projectFileDraft = it },
                             modifier = Modifier.fillMaxWidth().height(260.dp), minLines = 8, maxLines = 14,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp,
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+                    }
+                    TextButton(onClick = { projectCheckReport = onCheckProject() }) { Text("CHECK PROJECT") }
+                    if (projectCheckReport.isNotBlank()) {
+                        Text(projectCheckReport, color = Color(0xFFB8C9DD), fontSize = 10.sp)
                     }
                 }
             },
@@ -989,6 +1036,43 @@ private fun ShadowHome(
                 }, enabled = selectedProjectPath.isNotBlank()) { Text("SAVE FILE") }
             },
             dismissButton = { TextButton(onClick = { showWorkspaceDialog = false }) { Text("CLOSE") } },
+            containerColor = Color(0xFF101B2B), titleContentColor = Color.White, textContentColor = Color(0xFFB8C9DD)
+        )
+    }
+    if (showPreviewDialog) {
+        AlertDialog(
+            onDismissRequest = { showPreviewDialog = false },
+            title = { Text("Safe HTML Preview") },
+            text = {
+                Column {
+                    Text("JavaScript and network requests are disabled in this preview.", color = Color(0xFFB8C9DD), fontSize = 10.sp)
+                    AndroidView(
+                        factory = { context ->
+                            WebView(context).apply {
+                                settings.javaScriptEnabled = false
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
+                                settings.domStorageEnabled = false
+                                settings.blockNetworkLoads = true
+                                webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = true
+                                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse {
+                                        return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
+                                    }
+                                }
+                            }
+                        },
+                        update = { view ->
+                            if (view.tag != previewHtml) {
+                                view.tag = previewHtml
+                                view.loadDataWithBaseURL("https://shadow-preview.invalid/", previewHtml, "text/html", "UTF-8", null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(420.dp)
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { showPreviewDialog = false }) { Text("CLOSE") } },
             containerColor = Color(0xFF101B2B), titleContentColor = Color.White, textContentColor = Color(0xFFB8C9DD)
         )
     }
