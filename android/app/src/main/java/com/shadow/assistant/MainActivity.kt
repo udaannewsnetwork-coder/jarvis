@@ -72,6 +72,8 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 private data class ChatMessage(val role: String, val content: String)
 
@@ -89,6 +91,14 @@ class MainActivity : ComponentActivity() {
     private var chatMessages by mutableStateOf(listOf<ChatMessage>())
     private var savedMemories by mutableStateOf(listOf<String>())
     private var speechRecognizer: SpeechRecognizer? = null
+    private var generatedProjectJson by mutableStateOf("")
+    private var generatedProjectName by mutableStateOf("shadow-project")
+
+    private val exportProjectLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) exportProjectZip(uri)
+    }
 
     private val microphonePermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -103,6 +113,8 @@ class MainActivity : ComponentActivity() {
         endpoint = preferences.getString("backend_url", "").orEmpty()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
         voiceReplies = preferences.getBoolean("voice_replies", false)
+        generatedProjectJson = preferences.getString("generated_project_json", "").orEmpty()
+        generatedProjectName = preferences.getString("generated_project_name", "shadow-project").orEmpty()
         textToSpeech = TextToSpeech(this) { result ->
             ttsReady = result == TextToSpeech.SUCCESS
             if (ttsReady) {
@@ -169,7 +181,9 @@ class MainActivity : ComponentActivity() {
                 onDeleteMemory = { deleteMemory(it) },
                 onVoiceTap = { requestVoiceInput() },
                 onSend = { sendMessage() },
-                onResearch = { researchWeb() }
+                onResearch = { researchWeb() },
+                hasExportableProject = generatedProjectJson.isNotBlank(),
+                onExportProject = { exportProjectLauncher.launch("${generatedProjectName}.zip") }
             )
         }
     }
@@ -288,7 +302,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             try {
-                val reply = withContext(Dispatchers.IO) {
+                val replyResult = withContext(Dispatchers.IO) {
                     val connection = (URL(baseUrl + "/api/chat").openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
                         connectTimeout = 15000
@@ -421,15 +435,24 @@ class MainActivity : ComponentActivity() {
                             throw IllegalStateException(json?.optString("error")?.takeIf { it.isNotBlank() }
                                 ?: "Builder server error ($code)")
                         }
-                        json?.optString("reply")?.takeIf { it.isNotBlank() }
-                            ?: throw IllegalStateException("The builder returned an empty project preview.")
+                        val projectName = json?.optString("projectName")?.takeIf { it.isNotBlank() } ?: "shadow-project"
+                        val files = json?.optJSONArray("files")
+                        if (files == null || files.length() !in 2..10) throw IllegalStateException("The builder returned an invalid project file list.")
+                        Triple(projectName, json.optString("reply").takeIf { it.isNotBlank() }
+                            ?: throw IllegalStateException("The builder returned an empty project preview."), json.toString())
                     } finally {
                         connection.disconnect()
                     }
                 }
-                chatMessages = (chatMessages + ChatMessage("assistant", reply)).takeLast(30)
+                generatedProjectName = replyResult.first
+                generatedProjectJson = replyResult.third
+                getPreferences(MODE_PRIVATE).edit()
+                    .putString("generated_project_json", generatedProjectJson)
+                    .putString("generated_project_name", generatedProjectName)
+                    .apply()
+                chatMessages = (chatMessages + ChatMessage("assistant", replyResult.second)).takeLast(30)
                 saveMessages(chatMessages)
-                status = "Project source preview generated • not yet exported or built"
+                status = "Project source ready • use EXPORT ZIP to save the files"
                 if (voiceReplies) speakText("Your starter project source preview is ready.")
             } catch (error: Exception) {
                 chatMessages = chatMessages.dropLast(1)
@@ -442,6 +465,43 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun exportProjectZip(uri: android.net.Uri) {
+        val raw = generatedProjectJson
+        if (raw.isBlank()) { status = "Generate a project before exporting"; return }
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val project = JSONObject(raw)
+                    val files = project.optJSONArray("files") ?: throw IllegalStateException("No project files are available")
+                    require(files.length() in 2..10) { "Project file list is invalid" }
+                    val output = contentResolver.openOutputStream(uri) ?: throw IllegalStateException("Could not open the selected save location")
+                    output.use { stream ->
+                        ZipOutputStream(stream).use { zip ->
+                            var totalChars = 0
+                            for (index in 0 until files.length()) {
+                                val file = files.optJSONObject(index) ?: throw IllegalStateException("Invalid project file")
+                                val path = file.optString("path")
+                                val content = file.optString("content")
+                                require(path.isNotBlank() && path.length <= 160 && !path.startsWith("/") &&
+                                    !path.contains("..") && !path.contains(92.toChar()) &&
+                                    path.matches(Regex("[a-zA-Z0-9._/-]+")) &&
+                                    path.split("/").none { it.isBlank() || it == "." || it == ".." }) { "Unsafe project file path" }
+                                totalChars += content.length
+                                require(content.length <= 12000 && totalChars <= 40000) { "Project source is too large to export" }
+                                zip.putNextEntry(ZipEntry(path))
+                                zip.write(content.toByteArray(Charsets.UTF_8))
+                                zip.closeEntry()
+                            }
+                            zip.finish()
+                        }
+                    }
+                }
+                status = "Project ZIP saved successfully"
+            } catch (error: Exception) {
+                status = error.message?.take(160) ?: "Could not export project ZIP"
+            }
+        }
+    }
     private fun researchWeb() {
         val query = draft.trim()
         val baseUrl = endpoint.trim().trimEnd('/')
@@ -650,7 +710,9 @@ private fun ShadowHome(
     onDeleteMemory: (String) -> Unit,
     onVoiceTap: () -> Unit,
     onSend: () -> Unit,
-    onResearch: () -> Unit
+    onResearch: () -> Unit,
+    hasExportableProject: Boolean,
+    onExportProject: () -> Unit
 ) {
     val listState = rememberLazyListState()
     var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
@@ -679,6 +741,10 @@ private fun ShadowHome(
                             fontSize = 7.sp, letterSpacing = 1.35.sp)
                     }
                     Spacer(Modifier.weight(1f))
+                    if (hasExportableProject) {
+                        Text("EXPORT ZIP", color = Ice, fontSize = 9.sp,
+                            modifier = Modifier.clickable(onClick = onExportProject).padding(horizontal = 6.dp, vertical = 6.dp))
+                    }
                     Text("MEMORY", color = Ice, fontSize = 9.sp,
                         modifier = Modifier.clickable { showMemoryDialog = true }.padding(horizontal = 8.dp, vertical = 6.dp))
                     if (messages.isNotEmpty()) {
