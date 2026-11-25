@@ -1,5 +1,6 @@
 package com.shadow.assistant
 
+import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -123,7 +124,7 @@ private object MediaTrimProcessor {
             muxer.start()
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
-            val info = MediaMuxer.BufferInfo()
+            val info = MediaCodec.BufferInfo()
             var firstTimestamp = -1L
             var written = 0L
             while (true) {
