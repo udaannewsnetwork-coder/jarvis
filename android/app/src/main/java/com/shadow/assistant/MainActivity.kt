@@ -302,7 +302,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             try {
-                val replyResult = withContext(Dispatchers.IO) {
+                val reply = withContext(Dispatchers.IO) {
                     val connection = (URL(baseUrl + "/api/chat").openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
                         connectTimeout = 15000
@@ -413,7 +413,7 @@ class MainActivity : ComponentActivity() {
         status = "SHADOW Builder is designing your project…"
         lifecycleScope.launch {
             try {
-                val reply = withContext(Dispatchers.IO) {
+                val replyResult = withContext(Dispatchers.IO) {
                     val connection = (URL(baseUrl + "/api/build").openConnection() as HttpURLConnection).apply {
                         requestMethod = "POST"
                         connectTimeout = 15000
