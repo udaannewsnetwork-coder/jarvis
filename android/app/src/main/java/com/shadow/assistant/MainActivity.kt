@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity() {
                     responseLanguage = it
                     getPreferences(MODE_PRIVATE).edit().putString("response_language", it).apply()
                 },
-                onBackgroundWakeChange = { setBackgroundWakeEnabled(it) },
+                onBackgroundWakeChange = { setBackgroundWakeServiceEnabled(it) },
                 onVoiceRepliesChange = {
                     voiceReplies = it
                     getPreferences(MODE_PRIVATE).edit().putBoolean("voice_replies", it).apply()
@@ -224,7 +224,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun setBackgroundWakeEnabled(enabled: Boolean) {
+    private fun setBackgroundWakeServiceEnabled(enabled: Boolean) {
         if (!enabled) {
             backgroundWakeEnabled = false
             getSharedPreferences(BackgroundWakeService.PREFS, MODE_PRIVATE).edit()
