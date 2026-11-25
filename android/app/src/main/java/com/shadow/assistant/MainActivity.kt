@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val preferences = getPreferences(MODE_PRIVATE)
-        endpoint = preferences.getString("backend_url", "").orEmpty()
+        endpoint = preferences.getString("backend_url", "https://shadow-ai-api.udaannewsnetwork.workers.dev").orEmpty()
         apiToken = preferences.getString("cloud_ai_token", "").orEmpty()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
         voiceReplies = preferences.getBoolean("voice_replies", false)
