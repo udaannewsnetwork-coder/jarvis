@@ -252,13 +252,19 @@ class MainActivity : ComponentActivity() {
     private fun sendMessage() {
         val prompt = draft.trim()
         val codingMode = prompt.startsWith("/code ", ignoreCase = true)
-        val messageText = if (codingMode) prompt.substringAfter(' ').trim() else prompt
+        val buildMode = prompt.startsWith("/build ", ignoreCase = true)
+        val messageText = if (codingMode || buildMode) prompt.substringAfter(' ').trim() else prompt
         // Local assistant commands share the same chat composer; no separate screen is required.
         if (handleLocalCommand(prompt)) return
         // Web research is a mode inside the same chat composer: type /search followed by a query.
         if (prompt.startsWith("/search ", ignoreCase = true)) {
             draft = prompt.substringAfter(' ').trim()
             researchWeb()
+            return
+        }
+        if (buildMode) {
+            draft = messageText
+            buildProject()
             return
         }
         val baseUrl = endpoint.trim().trimEnd('/')
@@ -331,7 +337,7 @@ class MainActivity : ComponentActivity() {
         val command = prompt.trim()
         val lower = command.lowercase(Locale.ROOT)
         val response = when {
-            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands"
+            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/build <app idea> — generate a starter project source preview\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands"
             lower == "/memories" -> if (savedMemories.isEmpty()) {
                 "No saved memories yet. Use /remember <fact> to save one."
             } else {
@@ -370,6 +376,70 @@ class MainActivity : ComponentActivity() {
         status = "Local command complete"
         if (voiceReplies) speakText(response)
         return true
+    }
+
+
+    private fun buildProject() {
+        val description = draft.trim()
+        val baseUrl = endpoint.trim().trimEnd('/')
+        if (description.isBlank() || sending) return
+        if (!baseUrl.startsWith("https://")) {
+            status = "Add your deployed HTTPS backend URL before building"
+            return
+        }
+        if (description.length > 2000) {
+            status = "Project brief must be under 2,000 characters"
+            return
+        }
+        val updated = (chatMessages + ChatMessage("user", "Build project: " + description)).takeLast(30)
+        chatMessages = updated
+        saveMessages(updated)
+        draft = ""
+        sending = true
+        status = "SHADOW Builder is designing your project…"
+        lifecycleScope.launch {
+            try {
+                val reply = withContext(Dispatchers.IO) {
+                    val connection = (URL(baseUrl + "/api/build").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 15000
+                        readTimeout = 90000
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    try {
+                        val payload = JSONObject()
+                            .put("description", description)
+                            .put("language", if (responseLanguage == "English") "en" else "hi")
+                        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                        val code = connection.responseCode
+                        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        val json = runCatching { JSONObject(raw) }.getOrNull()
+                        if (code !in 200..299) {
+                            throw IllegalStateException(json?.optString("error")?.takeIf { it.isNotBlank() }
+                                ?: "Builder server error ($code)")
+                        }
+                        json?.optString("reply")?.takeIf { it.isNotBlank() }
+                            ?: throw IllegalStateException("The builder returned an empty project preview.")
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+                chatMessages = (chatMessages + ChatMessage("assistant", reply)).takeLast(30)
+                saveMessages(chatMessages)
+                status = "Project source preview generated • not yet exported or built"
+                if (voiceReplies) speakText("Your starter project source preview is ready.")
+            } catch (error: Exception) {
+                chatMessages = chatMessages.dropLast(1)
+                saveMessages(chatMessages)
+                draft = description
+                status = error.message?.take(180) ?: "Could not generate the project. Check your connection and backend."
+            } finally {
+                sending = false
+            }
+        }
     }
 
     private fun researchWeb() {
