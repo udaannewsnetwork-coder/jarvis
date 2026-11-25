@@ -9,6 +9,9 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.text.util.Linkify
+import android.text.method.LinkMovementMethod
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,6 +59,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -602,7 +606,23 @@ private fun ShadowHome(
                                             Text(if (message.role == "user") "YOU" else "SHADOW",
                                                 color = Ice, fontSize = 9.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
                                             Spacer(Modifier.height(5.dp))
-                                            Text(message.content, color = Color(0xFFE2EEFF), fontSize = 14.sp, lineHeight = 21.sp)
+                                            AndroidView(
+                                                factory = { context ->
+                                                    TextView(context).apply {
+                                                        setTextColor(android.graphics.Color.rgb(226, 238, 255))
+                                                        textSize = 14f
+                                                        setLineSpacing(0f, 1.25f)
+                                                        autoLinkMask = Linkify.WEB_URLS
+                                                        linksClickable = true
+                                                        movementMethod = LinkMovementMethod.getInstance()
+                                                    }
+                                                },
+                                                update = { view ->
+                                                    view.text = message.content
+                                                    Linkify.addLinks(view, Linkify.WEB_URLS)
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
                                     }
                                 }
