@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -74,6 +75,10 @@ class MainActivity : ComponentActivity() {
     private var sending by mutableStateOf(false)
     private var endpoint by mutableStateOf("")
     private var responseLanguage by mutableStateOf("Auto")
+    private var voiceReplies by mutableStateOf(false)
+    private var speaking by mutableStateOf(false)
+    private var textToSpeech: TextToSpeech? = null
+    private var ttsReady = false
     private var chatMessages by mutableStateOf(listOf<ChatMessage>())
     private var speechRecognizer: SpeechRecognizer? = null
 
@@ -89,6 +94,17 @@ class MainActivity : ComponentActivity() {
         val preferences = getPreferences(MODE_PRIVATE)
         endpoint = preferences.getString("backend_url", "").orEmpty()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
+        voiceReplies = preferences.getBoolean("voice_replies", false)
+        textToSpeech = TextToSpeech(this) { result ->
+            ttsReady = result == TextToSpeech.SUCCESS
+            if (ttsReady) {
+                textToSpeech?.setSpeechRate(0.92f)
+                textToSpeech?.setPitch(0.88f)
+                if (voiceReplies) status = "Voice engine ready"
+            } else {
+                status = "Device text-to-speech engine is unavailable"
+            }
+        }
         chatMessages = loadSavedMessages(preferences.getString("chat_history", "[]").orEmpty())
         if (chatMessages.isNotEmpty()) status = "Previous conversation restored"
         window.statusBarColor = android.graphics.Color.BLACK
@@ -99,6 +115,8 @@ class MainActivity : ComponentActivity() {
                 draft = draft,
                 endpoint = endpoint,
                 responseLanguage = responseLanguage,
+                voiceReplies = voiceReplies,
+                speaking = speaking,
                 messages = chatMessages,
                 listening = listening,
                 sending = sending,
@@ -111,6 +129,14 @@ class MainActivity : ComponentActivity() {
                     responseLanguage = it
                     getPreferences(MODE_PRIVATE).edit().putString("response_language", it).apply()
                 },
+                onVoiceRepliesChange = {
+                    voiceReplies = it
+                    getPreferences(MODE_PRIVATE).edit().putBoolean("voice_replies", it).apply()
+                    if (!it) stopSpeaking()
+                    status = if (it) "Voice replies enabled" else "Voice replies disabled"
+                },
+                onSpeakLatest = { speakLatestReply() },
+                onStopSpeaking = { stopSpeaking() },
                 onVoiceTap = { requestVoiceInput() },
                 onSend = { sendMessage() }
             )
@@ -248,6 +274,7 @@ class MainActivity : ComponentActivity() {
                 chatMessages = chatMessages + ChatMessage("assistant", reply)
                 saveMessages(chatMessages)
                 status = "Connected • SHADOW replied"
+                if (voiceReplies) speakText(reply)
             } catch (error: Exception) {
                 chatMessages = chatMessages.dropLast(1)
                 saveMessages(chatMessages)
@@ -257,6 +284,42 @@ class MainActivity : ComponentActivity() {
                 sending = false
             }
         }
+    }
+
+    private fun speakLatestReply() {
+        val latest = chatMessages.lastOrNull { it.role == "assistant" }?.content
+        if (latest.isNullOrBlank()) {
+            status = "No SHADOW reply to read yet"
+            return
+        }
+        speakText(latest)
+    }
+
+    private fun speakText(text: String) {
+        if (!ttsReady || textToSpeech == null) {
+            status = "Text-to-speech is not ready. Check your device speech engine."
+            return
+        }
+        val locale = if (text.any { it.code in 0x0900..0x097F }) Locale("hi", "IN") else Locale.getDefault()
+        val languageResult = textToSpeech?.setLanguage(locale)
+        if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+            languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+            status = "This voice language is not installed on your device"
+            return
+        }
+        val result = textToSpeech?.speak(text.take(3500), TextToSpeech.QUEUE_FLUSH, null, "shadow_reply")
+        if (result == TextToSpeech.SUCCESS) {
+            speaking = true
+            status = "SHADOW is speaking…"
+        } else {
+            status = "Could not start voice playback"
+        }
+    }
+
+    private fun stopSpeaking() {
+        textToSpeech?.stop()
+        speaking = false
+        if (status == "SHADOW is speaking…") status = "Voice playback stopped"
     }
 
     private fun saveMessages(messages: List<ChatMessage>) {
@@ -285,6 +348,9 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         speechRecognizer?.destroy()
         speechRecognizer = null
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        textToSpeech = null
         super.onDestroy()
     }
 }
@@ -299,12 +365,17 @@ private fun ShadowHome(
     draft: String,
     endpoint: String,
     responseLanguage: String,
+    voiceReplies: Boolean,
+    speaking: Boolean,
     messages: List<ChatMessage>,
     listening: Boolean,
     sending: Boolean,
     onDraftChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
     onLanguageChange: (String) -> Unit,
+    onVoiceRepliesChange: (Boolean) -> Unit,
+    onSpeakLatest: () -> Unit,
+    onStopSpeaking: () -> Unit,
     onVoiceTap: () -> Unit,
     onSend: () -> Unit
 ) {
@@ -395,6 +466,34 @@ private fun ShadowHome(
                                 Text(option, color = if (responseLanguage == option) Ice else Color(0xFF91A4BD),
                                     fontSize = 10.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
                             }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("VOICE REPLIES", color = Color(0xFF91A4BD), fontSize = 9.sp, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(
+                            color = if (voiceReplies) Color(0xFF173B63) else Color(0xFF101B2B),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.clickable { onVoiceRepliesChange(!voiceReplies) }
+                        ) {
+                            Text(if (voiceReplies) "AUTO ON" else "AUTO OFF",
+                                color = if (voiceReplies) Ice else Color(0xFF91A4BD),
+                                fontSize = 10.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                        }
+                        Surface(
+                            color = Color(0xFF101B2B),
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.clickable { if (speaking) onStopSpeaking() else onSpeakLatest() }
+                        ) {
+                            Text(if (speaking) "STOP" else "READ LAST",
+                                color = Ice, fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                         }
                     }
                 }
