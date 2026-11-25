@@ -441,6 +441,7 @@ class MainActivity : ComponentActivity() {
                         doOutput = true
                         setRequestProperty("Content-Type", "application/json; charset=utf-8")
                         setRequestProperty("Accept", "application/json")
+                        setRequestProperty("Authorization", "Bearer $apiToken")
                     }
                     try {
                         val payload = JSONObject()
@@ -607,6 +608,7 @@ class MainActivity : ComponentActivity() {
                         doOutput = true
                         setRequestProperty("Content-Type", "application/json; charset=utf-8")
                         setRequestProperty("Accept", "application/json")
+                        setRequestProperty("Authorization", "Bearer $apiToken")
                     }
                     try {
                         val payload = JSONObject().put("query", query)
