@@ -105,6 +105,8 @@ class MainActivity : ComponentActivity() {
     private var generatedProjectJson by mutableStateOf("")
     private var generatedProjectName by mutableStateOf("shadow-project")
     private var projectFiles by mutableStateOf(listOf<ProjectFile>())
+    private var externalPlugins by mutableStateOf(listOf<ExternalPlugin>())
+    private var pluginBusy by mutableStateOf(false)
 
     private val exportProjectLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
@@ -145,6 +147,7 @@ class MainActivity : ComponentActivity() {
         generatedProjectJson = preferences.getString("generated_project_json", "").orEmpty()
         generatedProjectName = preferences.getString("generated_project_name", "shadow-project").orEmpty()
         projectFiles = parseProjectFiles(generatedProjectJson)
+        externalPlugins = ExternalPlugin.restore(preferences.getString("external_plugins_v1", "[]").orEmpty())
         textToSpeech = TextToSpeech(this) { result ->
             ttsReady = result == TextToSpeech.SUCCESS
             if (ttsReady) {
@@ -224,9 +227,116 @@ class MainActivity : ComponentActivity() {
                 projectFiles = projectFiles,
                 onExportProject = { exportProjectLauncher.launch("${generatedProjectName}.zip") },
                 onSaveProjectFile = { path, content -> saveProjectFile(path, content) },
-                onCheckProject = { validateProjectSource() }
+                onCheckProject = { validateProjectSource() },
+                externalPlugins = externalPlugins, pluginStatus = status, pluginBusy = pluginBusy,
+                onImportPlugin = { url, token -> importExternalPlugin(url, token) },
+                onRunPlugin = { id, actionId, payload -> runExternalPluginAction(id, actionId, payload) },
+                onDisconnectPlugin = { id -> disconnectExternalPlugin(id) }
             )
         }
+    }
+
+    private fun saveExternalPlugins() {
+        getPreferences(MODE_PRIVATE).edit().putString("external_plugins_v1",
+            org.json.JSONArray().apply { externalPlugins.forEach { put(it.toJson()) } }.toString()).apply()
+    }
+
+    private fun importExternalPlugin(manifestUrl: String, token: String) {
+        if (pluginBusy) return
+        val parsedUrl = runCatching { java.net.URI(manifestUrl) }.getOrNull()
+        if (parsedUrl == null || parsedUrl.scheme != "https" || parsedUrl.host.isNullOrBlank() || parsedUrl.userInfo != null) {
+            status = "Manifest URL must be a valid HTTPS address"
+            return
+        }
+        pluginBusy = true
+        status = "Fetching plugin manifest…"
+        lifecycleScope.launch {
+            try {
+                val plugin = withContext(Dispatchers.IO) {
+                    val connection = (URL(manifestUrl).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        instanceFollowRedirects = false
+                        connectTimeout = 10000
+                        readTimeout = 15000
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    try {
+                        val code = connection.responseCode
+                        require(code in 200..299) { "Manifest server returned HTTP $code (redirects blocked)" }
+                        val raw = connection.inputStream.bufferedReader().use { it.readText() }
+                        require(raw.length <= 64000) { "Manifest exceeds 64 KB" }
+                        ExternalPlugin.parse(raw)
+                    } finally { connection.disconnect() }
+                }
+                externalPlugins = (externalPlugins.filterNot { it.id == plugin.id } + plugin).takeLast(20)
+                saveExternalPlugins()
+                PluginSecretStore.write(this@MainActivity, plugin.id, token.trim())
+                status = "Connected " + plugin.name + " • " + plugin.actions.size + " actions"
+            } catch (error: Exception) {
+                status = "Plugin connect failed: " + (error.message ?: "invalid manifest").take(150)
+            } finally { pluginBusy = false }
+        }
+    }
+
+    private fun runExternalPluginAction(pluginId: String, actionId: String, payload: String) {
+        if (pluginBusy) return
+        val plugin = externalPlugins.firstOrNull { it.id == pluginId }
+        val action = plugin?.actions?.firstOrNull { it.id == actionId }
+        if (plugin == null || action == null) {
+            status = "Plugin or action is no longer installed"
+            return
+        }
+        val body = runCatching { org.json.JSONObject(payload) }.getOrNull()
+        if (body == null || payload.length > 8000) {
+            status = "Action input must be valid JSON under 8 KB"
+            return
+        }
+        pluginBusy = true
+        status = "Running plugin action…"
+        lifecycleScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    val target = URL(plugin.baseUrl + action.path)
+                    require(target.protocol == "https" && target.host == URL(plugin.baseUrl).host) {
+                        "Plugin action must stay on its declared HTTPS host"
+                    }
+                    val connection = (target.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        instanceFollowRedirects = false
+                        connectTimeout = 10000
+                        readTimeout = 15000
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        setRequestProperty("Accept", "application/json, text/plain")
+                        PluginSecretStore.read(this@MainActivity, pluginId)?.takeIf { it.isNotBlank() }?.let {
+                            setRequestProperty("Authorization", "Bearer " + it)
+                        }
+                    }
+                    try {
+                        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                        val code = connection.responseCode
+                        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        require(raw.length <= 32000) { "Plugin response exceeds 32 KB" }
+                        require(code in 200..299) { "Plugin returned HTTP " + code + ": " + raw.take(300) }
+                        raw.ifBlank { "Plugin action completed successfully (empty response)." }
+                    } finally { connection.disconnect() }
+                }
+                chatMessages = (chatMessages + ChatMessage("assistant",
+                    "PLUGIN • " + plugin.name + " / " + action.name + "\n\n" + result)).takeLast(30)
+                saveMessages(chatMessages)
+                status = "Plugin action completed • " + plugin.name
+            } catch (error: Exception) {
+                status = "Plugin action failed: " + (error.message ?: "unknown error").take(180)
+            } finally { pluginBusy = false }
+        }
+    }
+
+    private fun disconnectExternalPlugin(pluginId: String) {
+        externalPlugins = externalPlugins.filterNot { it.id == pluginId }
+        PluginSecretStore.clear(this, pluginId)
+        saveExternalPlugins()
+        status = "Plugin disconnected and its saved token cleared"
     }
 
     private fun setBackgroundWakeServiceEnabled(enabled: Boolean) {
@@ -831,7 +941,9 @@ private fun ShadowHome(
  onDraftChange:(String)->Unit,onEndpointChange:(String)->Unit,onApiTokenChange:(String)->Unit,onLanguageChange:(String)->Unit,
  onVoiceRepliesChange:(Boolean)->Unit,onBackgroundWakeChange:(Boolean)->Unit,onSpeakLatest:()->Unit,onStopSpeaking:()->Unit,onClearChat:()->Unit,
  onAddMemory:(String)->Unit,onDeleteMemory:(String)->Unit,onVoiceTap:()->Unit,onSend:()->Unit,onResearch:()->Unit,
- hasExportableProject:Boolean,projectFiles:List<ProjectFile>,onExportProject:()->Unit,onSaveProjectFile:(String,String)->Unit,onCheckProject:()->String
+ hasExportableProject:Boolean,projectFiles:List<ProjectFile>,onExportProject:()->Unit,onSaveProjectFile:(String,String)->Unit,onCheckProject:()->String,
+ externalPlugins:List<ExternalPlugin>,pluginStatus:String,pluginBusy:Boolean,
+ onImportPlugin:(String,String)->Unit,onRunPlugin:(String,String,String)->Unit,onDisconnectPlugin:(String)->Unit
 ) {
  val listState=rememberLazyListState()
  var selectedTab by androidx.compose.runtime.remember { mutableStateOf("Home") }
@@ -863,7 +975,7 @@ private fun ShadowHome(
      }
     }
     when(selectedTab) {
-     "Plugins" -> PluginHubScreen()
+     "Plugins" -> PluginHubScreen(plugins=externalPlugins,status=pluginStatus,busy=pluginBusy,onImport=onImportPlugin,onRun=onRunPlugin,onDisconnect=onDisconnectPlugin)
      "Home" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(9.dp)) {
       Spacer(Modifier.height(2.dp))
       HomeHeroBackdrop(listening= listening,onClick=onVoiceTap)
