@@ -993,7 +993,7 @@ private fun ShadowHome(
      }
     }
     when(selectedTab) {
-     "Plugins" -> PluginHubScreen(modifier=Modifier.weight(1f),plugins=externalPlugins,status=pluginStatus,busy=pluginBusy,onImport=onImportPlugin,onRun=onRunPlugin,onDisconnect=onDisconnectPlugin)
+     "Skills" -> PluginHubScreen(modifier=Modifier.weight(1f),plugins=externalPlugins,status=pluginStatus,busy=pluginBusy,onImport=onImportPlugin,onRun=onRunPlugin,onDisconnect=onDisconnectPlugin)
      "Home" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(9.dp)) {
       Spacer(Modifier.height(2.dp))
       HomeHeroBackdrop(listening= listening,onClick=onVoiceTap)
@@ -1074,9 +1074,9 @@ private fun ShadowHome(
      Button(onClick=onSend,enabled=!sending&&draft.isNotBlank(),colors=ButtonDefaults.buttonColors(containerColor=Blue),modifier=Modifier.height(50.dp)) { Text("➤",color=Color.White) }
     }
     Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceAround,verticalAlignment=Alignment.CenterVertically) {
-     listOf("Home","Chat","Studio","Plugins","Settings").forEach { tab ->
+     listOf("Home","Chat","Studio","Skills","Settings").forEach { tab ->
       Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.weight(1f).clickable { selectedTab=tab }.padding(vertical=5.dp)) {
-       Text(when(tab) { "Home"->"⌂"; "Chat"->"◌"; "Studio"->"▣"; "Plugins"->"⧉"; else->"⚙" },color=if(selectedTab==tab) Ice else Color(0xFF91A4BD),fontSize=22.sp)
+       Text(when(tab) { "Home"->"⌂"; "Chat"->"◌"; "Studio"->"▣"; "Skills"->"⧉"; else->"⚙" },color=if(selectedTab==tab) Ice else Color(0xFF91A4BD),fontSize=22.sp)
        Text(tab,color=if(selectedTab==tab) Ice else Color(0xFF91A4BD),fontSize=10.sp,fontWeight=if(selectedTab==tab) FontWeight.Bold else FontWeight.Normal)
        if(selectedTab==tab) Box(Modifier.padding(top=3.dp).size(width=34.dp,height=2.dp).background(Blue,RoundedCornerShape(2.dp)))
       }
