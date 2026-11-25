@@ -88,6 +88,8 @@ class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("Your assistant is standing by")
     private var draft by mutableStateOf("")
     private var listening by mutableStateOf(false)
+    private var backgroundWakeEnabled by mutableStateOf(false)
+    private var pendingBackgroundStart = false
     private var sending by mutableStateOf(false)
     private var endpoint by mutableStateOf("")
     private var apiToken by mutableStateOf("")
@@ -112,9 +114,20 @@ class MainActivity : ComponentActivity() {
     private val microphonePermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) beginRecognition()
-        else status = "Microphone permission is needed for voice input"
+        if (granted) {
+            if (pendingBackgroundStart) {
+                pendingBackgroundStart = false
+                requestNotificationPermissionAndStartWake()
+            } else beginRecognition()
+        } else {
+            pendingBackgroundStart = false
+            status = "Microphone permission is needed for voice input"
+        }
     }
+
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> startWakeService() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,6 +136,7 @@ class MainActivity : ComponentActivity() {
         apiToken = preferences.getString("cloud_ai_token", "").orEmpty()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
         voiceReplies = preferences.getBoolean("voice_replies", false)
+        backgroundWakeEnabled = preferences.getBoolean(BackgroundWakeService.KEY_ENABLED, false)
         generatedProjectJson = preferences.getString("generated_project_json", "").orEmpty()
         generatedProjectName = preferences.getString("generated_project_name", "shadow-project").orEmpty()
         projectFiles = parseProjectFiles(generatedProjectJson)
@@ -166,6 +180,7 @@ class MainActivity : ComponentActivity() {
                 apiToken = apiToken,
                 responseLanguage = responseLanguage,
                 voiceReplies = voiceReplies,
+                backgroundWakeEnabled = backgroundWakeEnabled,
                 speaking = speaking,
                 messages = chatMessages,
                 memories = savedMemories,
@@ -184,6 +199,7 @@ class MainActivity : ComponentActivity() {
                     responseLanguage = it
                     getPreferences(MODE_PRIVATE).edit().putString("response_language", it).apply()
                 },
+                onBackgroundWakeChange = { setBackgroundWakeEnabled(it) },
                 onVoiceRepliesChange = {
                     voiceReplies = it
                     getPreferences(MODE_PRIVATE).edit().putBoolean("voice_replies", it).apply()
@@ -204,6 +220,42 @@ class MainActivity : ComponentActivity() {
                 onSaveProjectFile = { path, content -> saveProjectFile(path, content) },
                 onCheckProject = { validateProjectSource() }
             )
+        }
+    }
+
+    private fun setBackgroundWakeEnabled(enabled: Boolean) {
+        if (!enabled) {
+            backgroundWakeEnabled = false
+            getSharedPreferences(BackgroundWakeService.PREFS, MODE_PRIVATE).edit()
+                .putBoolean(BackgroundWakeService.KEY_ENABLED, false).apply()
+            stopService(Intent(this, BackgroundWakeService::class.java).setAction(BackgroundWakeService.ACTION_STOP))
+            status = "Background wake word stopped"
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingBackgroundStart = true
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        requestNotificationPermissionAndStartWake()
+    }
+
+    private fun requestNotificationPermissionAndStartWake() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else startWakeService()
+    }
+
+    private fun startWakeService() {
+        val intent = Intent(this, BackgroundWakeService::class.java).setAction(BackgroundWakeService.ACTION_START)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+            backgroundWakeEnabled = true
+            status = "SHADOW background wake word starting • check its notification"
+        } catch (error: Exception) {
+            backgroundWakeEnabled = false
+            status = error.message?.take(140) ?: "Could not start background listening"
         }
     }
 
@@ -768,10 +820,10 @@ private val Ice = Color(0xFF8BD8FF)
 
 @Composable
 private fun ShadowHome(
- status:String,draft:String,endpoint:String,apiToken:String,responseLanguage:String,voiceReplies:Boolean,speaking:Boolean,
+ status:String,draft:String,endpoint:String,apiToken:String,responseLanguage:String,voiceReplies:Boolean,backgroundWakeEnabled:Boolean,speaking:Boolean,
  messages:List<ChatMessage>,memories:List<String>,listening:Boolean,sending:Boolean,
  onDraftChange:(String)->Unit,onEndpointChange:(String)->Unit,onApiTokenChange:(String)->Unit,onLanguageChange:(String)->Unit,
- onVoiceRepliesChange:(Boolean)->Unit,onSpeakLatest:()->Unit,onStopSpeaking:()->Unit,onClearChat:()->Unit,
+ onVoiceRepliesChange:(Boolean)->Unit,onBackgroundWakeChange:(Boolean)->Unit,onSpeakLatest:()->Unit,onStopSpeaking:()->Unit,onClearChat:()->Unit,
  onAddMemory:(String)->Unit,onDeleteMemory:(String)->Unit,onVoiceTap:()->Unit,onSend:()->Unit,onResearch:()->Unit,
  hasExportableProject:Boolean,projectFiles:List<ProjectFile>,onExportProject:()->Unit,onSaveProjectFile:(String,String)->Unit,onCheckProject:()->String
 ) {
@@ -872,6 +924,9 @@ private fun ShadowHome(
       Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("Auto","Hindi","English").forEach { option -> Surface(color=if(responseLanguage==option) Color(0xFF173B63) else Color(0xFF101B2B),shape=RoundedCornerShape(20.dp),modifier=Modifier.clickable { onLanguageChange(option) }) { Text(option,color=Color.White,modifier=Modifier.padding(horizontal=13.dp,vertical=9.dp),fontSize=11.sp) } } }
       Text("VOICE",color=Ice,fontSize=10.sp,fontWeight=FontWeight.Bold)
       Row(verticalAlignment=Alignment.CenterVertically) { Text(if(voiceReplies) "Automatic voice replies ON" else "Automatic voice replies OFF",color=Color.White,modifier=Modifier.weight(1f),fontSize=12.sp); Button(onClick={onVoiceRepliesChange(!voiceReplies)}) { Text(if(voiceReplies) "TURN OFF" else "TURN ON") } }
+      Text("BACKGROUND WAKE WORD",color=Ice,fontSize=10.sp,fontWeight=FontWeight.Bold)
+      Text("Say “Shadow” while the visible microphone notification is active. Speech is handled by the Android speech-recognition provider.",color=Color(0xFF9CB5D3),fontSize=10.sp)
+      Row(verticalAlignment=Alignment.CenterVertically) { Text(if(backgroundWakeEnabled) "Background listening requested" else "Background listening OFF",color=Color.White,modifier=Modifier.weight(1f),fontSize=12.sp); Button(onClick={onBackgroundWakeChange(!backgroundWakeEnabled)}) { Text(if(backgroundWakeEnabled) "STOP" else "START") } }
       Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { Button(onClick=onSpeakLatest) { Text("READ LAST") }; Button(onClick=onStopSpeaking) { Text("STOP VOICE") }; Button(onClick={showMemoryDialog=true}) { Text("MEMORY") } }
       Text(status,color=Color(0xFF91A4BD),fontSize=10.sp); Spacer(Modifier.weight(1f))
      }
