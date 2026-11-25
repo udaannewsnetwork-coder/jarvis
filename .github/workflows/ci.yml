@@ -1,0 +1,20 @@
+name: JARVIS CI
+
+on:
+  push:
+    branches: [main, shadow-jarvis-foundation]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+        env:
+          OPENAI_API_KEY: ci-placeholder-not-a-real-secret
