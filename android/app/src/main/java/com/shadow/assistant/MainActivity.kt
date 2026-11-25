@@ -205,11 +205,8 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val updated = chatMessages + ChatMessage("user", prompt)
-        if (updated.size > 30) {
-            status = "Chat limit reached. Start a new chat to continue."
-            return
-        }
+        // Keep the latest 30 messages to stay within the server's context limit.
+        val updated = (chatMessages + ChatMessage("user", prompt)).takeLast(30)
         chatMessages = updated
         saveMessages(updated)
         draft = ""
