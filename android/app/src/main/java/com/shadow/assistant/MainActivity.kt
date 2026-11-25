@@ -471,8 +471,9 @@ class MainActivity : ComponentActivity() {
     private fun sendMessage() {
         val prompt = draft.trim()
         val codingMode = prompt.startsWith("/code ", ignoreCase = true)
+        val creatorMode = prompt.startsWith("/creator ", ignoreCase = true)
         val buildMode = prompt.startsWith("/build ", ignoreCase = true)
-        val messageText = if (codingMode || buildMode) prompt.substringAfter(' ').trim() else prompt
+        val messageText = if (codingMode || creatorMode || buildMode) prompt.substringAfter(' ').trim() else prompt
         // Local assistant commands share the same chat composer; no separate screen is required.
         if (handleLocalCommand(prompt)) return
         // Web research is a mode inside the same chat composer: type /search followed by a query.
@@ -498,7 +499,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // Keep the latest 30 messages to stay within the server's context limit.
-        val updated = (chatMessages + ChatMessage("user", if (codingMode) "Coding task: " + messageText else messageText)).takeLast(30)
+        val updated = (chatMessages + ChatMessage("user", if (codingMode) "Coding task: " + messageText else if (creatorMode) "Creator Studio task: " + messageText else messageText)).takeLast(30)
         chatMessages = updated
         saveMessages(updated)
         draft = ""
@@ -522,7 +523,7 @@ class MainActivity : ComponentActivity() {
                             updated.forEach { message ->
                                 put(JSONObject().put("role", message.role).put("content", message.content))
                             }
-                        }).put("language", when (responseLanguage) { "English" -> "en"; "Hindi" -> "hi"; else -> "auto" }).put("mode", if (codingMode) "coding" else "chat")
+                        }).put("language", when (responseLanguage) { "English" -> "en"; "Hindi" -> "hi"; else -> "auto" }).put("mode", if (codingMode) "coding" else if (creatorMode) "creator" else "chat")
                         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
                         val code = connection.responseCode
                         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -557,7 +558,7 @@ class MainActivity : ComponentActivity() {
         val command = prompt.trim()
         val lower = command.lowercase(Locale.ROOT)
         val response = when {
-            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/build <app idea> — generate a starter project source preview\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands\n\nVOICE COMMANDS (background listening)\n“Shadow, what time is it” — current time\n“Shadow, battery status” — battery level\n“Shadow, set timer for 5 minutes” — timer notification\n“Shadow, remind me in 20 minutes to drink water” — reminder\n“Shadow, volume up/down” — media volume\n“Shadow, open YouTube” — tap OPEN in notification\n“Shadow, search weather tomorrow” — tap OPEN in notification"
+            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/creator <video/audio idea> — script, storyboard and editing workflow\\n/build <app idea> — generate a starter project source preview\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands\n\nVOICE COMMANDS (background listening)\n“Shadow, what time is it” — current time\n“Shadow, battery status” — battery level\n“Shadow, set timer for 5 minutes” — timer notification\n“Shadow, remind me in 20 minutes to drink water” — reminder\n“Shadow, volume up/down” — media volume\n“Shadow, open YouTube” — tap OPEN in notification\n“Shadow, search weather tomorrow” — tap OPEN in notification"
             lower == "/memories" -> if (savedMemories.isEmpty()) {
                 "No saved memories yet. Use /remember <fact> to save one."
             } else {
@@ -1043,6 +1044,7 @@ private fun ShadowHome(
       Text("SHADOW STUDIO",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Bold)
       Text("Describe an app or website. SHADOW will generate a starter project with editable source files.",color=Color(0xFFB9CBE1),fontSize=13.sp)
       ActionTile("PROJECT BUILDER","Generate source files","</>",Modifier.fillMaxWidth()) { if(!draft.startsWith("/build ")) onDraftChange("/build ") }
+      ActionTile("AI CREATOR PLANNER","Script • storyboard • edit plan","▶",Modifier.fillMaxWidth()) { if(!draft.startsWith("/creator ")) onDraftChange("/creator ") }
       if(hasExportableProject) {
        Text("${projectFiles.size} project files available",color=Ice,fontSize=12.sp)
        Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
