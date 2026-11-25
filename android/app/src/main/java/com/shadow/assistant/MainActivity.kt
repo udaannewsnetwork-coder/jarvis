@@ -768,257 +768,142 @@ private val Ice = Color(0xFF8BD8FF)
 
 @Composable
 private fun ShadowHome(
-    status: String,
-    draft: String,
-    endpoint: String,
-    apiToken: String,
-    responseLanguage: String,
-    voiceReplies: Boolean,
-    speaking: Boolean,
-    messages: List<ChatMessage>,
-    memories: List<String>,
-    listening: Boolean,
-    sending: Boolean,
-    onDraftChange: (String) -> Unit,
-    onEndpointChange: (String) -> Unit,
-    onApiTokenChange: (String) -> Unit,
-    onLanguageChange: (String) -> Unit,
-    onVoiceRepliesChange: (Boolean) -> Unit,
-    onSpeakLatest: () -> Unit,
-    onStopSpeaking: () -> Unit,
-    onClearChat: () -> Unit,
-    onAddMemory: (String) -> Unit,
-    onDeleteMemory: (String) -> Unit,
-    onVoiceTap: () -> Unit,
-    onSend: () -> Unit,
-    onResearch: () -> Unit,
-    hasExportableProject: Boolean,
-    projectFiles: List<ProjectFile>,
-    onExportProject: () -> Unit,
-    onSaveProjectFile: (String, String) -> Unit,
-    onCheckProject: () -> String
+ status:String,draft:String,endpoint:String,apiToken:String,responseLanguage:String,voiceReplies:Boolean,speaking:Boolean,
+ messages:List<ChatMessage>,memories:List<String>,listening:Boolean,sending:Boolean,
+ onDraftChange:(String)->Unit,onEndpointChange:(String)->Unit,onApiTokenChange:(String)->Unit,onLanguageChange:(String)->Unit,
+ onVoiceRepliesChange:(Boolean)->Unit,onSpeakLatest:()->Unit,onStopSpeaking:()->Unit,onClearChat:()->Unit,
+ onAddMemory:(String)->Unit,onDeleteMemory:(String)->Unit,onVoiceTap:()->Unit,onSend:()->Unit,onResearch:()->Unit,
+ hasExportableProject:Boolean,projectFiles:List<ProjectFile>,onExportProject:()->Unit,onSaveProjectFile:(String,String)->Unit,onCheckProject:()->String
 ) {
-    val listState = rememberLazyListState()
-    var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
-    var showMemoryDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
-    var memoryDraft by androidx.compose.runtime.remember { mutableStateOf("") }
-    var showWorkspaceDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
-    var selectedProjectPath by androidx.compose.runtime.remember { mutableStateOf("") }
-    var projectFileDraft by androidx.compose.runtime.remember { mutableStateOf("") }
-    var projectCheckReport by androidx.compose.runtime.remember { mutableStateOf("") }
-    var showPreviewDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
-    var previewHtml by androidx.compose.runtime.remember { mutableStateOf("") }
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+ val listState=rememberLazyListState()
+ var selectedTab by androidx.compose.runtime.remember { mutableStateOf("Home") }
+ var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
+ var showMemoryDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
+ var memoryDraft by androidx.compose.runtime.remember { mutableStateOf("") }
+ var showWorkspaceDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
+ var selectedProjectPath by androidx.compose.runtime.remember { mutableStateOf("") }
+ var projectFileDraft by androidx.compose.runtime.remember { mutableStateOf("") }
+ var projectCheckReport by androidx.compose.runtime.remember { mutableStateOf("") }
+ var showPreviewDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
+ var previewHtml by androidx.compose.runtime.remember { mutableStateOf("") }
+ LaunchedEffect(messages.size,selectedTab) { if(messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex) }
+ MaterialTheme {
+  Surface(Modifier.fillMaxSize(),color=Night) {
+   Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF02050B),Color(0xFF061326),Color(0xFF020711)))).padding(horizontal=16.dp,vertical=12.dp)) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+     ShadowLogoMark(Modifier.size(42.dp))
+     Column(Modifier.padding(start=9.dp)) {
+      Text("SHADOW",color=Color.White,fontSize=18.sp,fontWeight=FontWeight.ExtraBold,letterSpacing=2.2.sp)
+      Text("PERSONAL INTELLIGENCE",color=Ice,fontSize=8.sp,letterSpacing=1.5.sp)
+     }
+     Spacer(Modifier.weight(1f))
+     Surface(color=Color(0xFF08251F),shape=RoundedCornerShape(24.dp)) {
+      Row(Modifier.padding(horizontal=10.dp,vertical=7.dp),verticalAlignment=Alignment.CenterVertically) {
+       Box(Modifier.size(7.dp).background(if(sending) Color(0xFFFFC857) else Color(0xFF39E69A),RoundedCornerShape(50)))
+       Text(if(sending) " THINKING" else " CLOUD AI",color=Color(0xFF7FFFC0),fontSize=9.sp,fontWeight=FontWeight.Bold)
+      }
+     }
     }
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = Night) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.verticalGradient(listOf(Color.Black, Night, Color(0xFF071323))))
-                    .padding(horizontal = 18.dp, vertical = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ShadowLogoMark(modifier = Modifier.size(42.dp))
-                    Column(modifier = Modifier.padding(start = 10.dp)) {
-                        Text("SHADOW", color = Color.White, fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold, letterSpacing = 2.6.sp)
-                        Text("PERSONAL INTELLIGENCE", color = Color(0xFF7896B8),
-                            fontSize = 7.sp, letterSpacing = 1.35.sp)
-                    }
-                    Spacer(Modifier.weight(1f))
-                    if (hasExportableProject) {
-                        Text("WORKSPACE", color = Ice, fontSize = 9.sp,
-                            modifier = Modifier.clickable {
-                                selectedProjectPath = projectFiles.firstOrNull()?.path.orEmpty()
-                                projectFileDraft = projectFiles.firstOrNull()?.content.orEmpty()
-                                showWorkspaceDialog = true
-                            }.padding(horizontal = 6.dp, vertical = 6.dp))
-                        Text("EXPORT ZIP", color = Ice, fontSize = 9.sp,
-                            modifier = Modifier.clickable(onClick = onExportProject).padding(horizontal = 6.dp, vertical = 6.dp))
-                    }
-                    Text("MEMORY", color = Ice, fontSize = 9.sp,
-                        modifier = Modifier.clickable { showMemoryDialog = true }.padding(horizontal = 8.dp, vertical = 6.dp))
-                    if (messages.isNotEmpty()) {
-                        Text("CLEAR", color = Color(0xFFFF9A9A), fontSize = 9.sp,
-                            modifier = Modifier.clickable { showClearConfirmation = true }.padding(horizontal = 8.dp, vertical = 6.dp))
-                    }
-                    Text(if (listening) "● LISTENING" else if (sending) "● THINKING" else "● READY",
-                        color = if (listening || sending) Ice else Color(0xFF73D6A6), fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (messages.isEmpty()) {
-                        Spacer(Modifier.weight(1f))
-                        Text("YOUR PERSONAL AI", color = Color(0xFF7F9DBD), fontSize = 10.sp, letterSpacing = 3.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text("I'm here.\nWhat shall we do?", color = Color(0xFFF1F6FF), fontSize = 26.sp,
-                            lineHeight = 34.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                        ShadowOrb(listening = listening, onClick = onVoiceTap)
-                        Text(if (listening) "LISTENING — TAP TO STOP" else "TAP THE ORB TO SPEAK",
-                            color = Ice, fontSize = 10.sp, letterSpacing = 2.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(status, color = Color(0xFF91A4BD), fontSize = 12.sp, textAlign = TextAlign.Center)
-                        Spacer(Modifier.weight(1f))
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            state = listState,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(messages) { message ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = if (message.role == "user") Arrangement.End else Arrangement.Start
-                                ) {
-                                    Surface(
-                                        color = if (message.role == "user") Color(0xFF12345A) else Color(0xFF101B2B),
-                                        shape = RoundedCornerShape(18.dp),
-                                        modifier = Modifier.fillMaxWidth(0.88f)
-                                    ) {
-                                        Column(Modifier.padding(14.dp)) {
-                                            Text(if (message.role == "user") "YOU" else "SHADOW",
-                                                color = Ice, fontSize = 9.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                                            Spacer(Modifier.height(5.dp))
-                                            AndroidView(
-                                                factory = { context ->
-                                                    TextView(context).apply {
-                                                        setTextColor(android.graphics.Color.rgb(226, 238, 255))
-                                                        textSize = 14f
-                                                        setLineSpacing(0f, 1.25f)
-                                                        autoLinkMask = Linkify.WEB_URLS
-                                                        linksClickable = true
-                                                        movementMethod = LinkMovementMethod.getInstance()
-                                                    }
-                                                },
-                                                update = { view ->
-                                                    view.text = message.content
-                                                    Linkify.addLinks(view, Linkify.WEB_URLS)
-                                                },
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            if (sending) item {
-                                Text("SHADOW is thinking…", color = Ice, fontSize = 12.sp, modifier = Modifier.padding(8.dp))
-                            }
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("RESPONSE LANGUAGE", color = Color(0xFF91A4BD), fontSize = 9.sp, letterSpacing = 1.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Auto", "Hindi", "English").forEach { option ->
-                            Surface(
-                                color = if (responseLanguage == option) Color(0xFF173B63) else Color(0xFF101B2B),
-                                shape = RoundedCornerShape(20.dp),
-                                modifier = Modifier.clickable { onLanguageChange(option) }
-                            ) {
-                                Text(option, color = if (responseLanguage == option) Ice else Color(0xFF91A4BD),
-                                    fontSize = 10.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("VOICE REPLIES", color = Color(0xFF91A4BD), fontSize = 9.sp, letterSpacing = 1.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Surface(
-                            color = if (voiceReplies) Color(0xFF173B63) else Color(0xFF101B2B),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.clickable { onVoiceRepliesChange(!voiceReplies) }
-                        ) {
-                            Text(if (voiceReplies) "AUTO ON" else "AUTO OFF",
-                                color = if (voiceReplies) Ice else Color(0xFF91A4BD),
-                                fontSize = 10.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                        }
-                        Surface(
-                            color = Color(0xFF101B2B),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.clickable { if (speaking) onStopSpeaking() else onSpeakLatest() }
-                        ) {
-                            Text(if (speaking) "STOP" else "READ LAST",
-                                color = Ice, fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = onEndpointChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("Backend URL (HTTPS)") },
-                    placeholder = { Text("https://your-shadow-server.example") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 12.sp)
-                )
-                OutlinedTextField(
-                    value = apiToken,
-                    onValueChange = onApiTokenChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("Cloud AI access token") },
-                    placeholder = { Text("Paste your private SHADOW token") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 12.sp)
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = onVoiceTap,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF132A46)),
-                        modifier = Modifier.height(54.dp)
-                    ) { Text(if (listening) "Stop" else "🎙", color = Ice) }
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = onDraftChange,
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message SHADOW…  (/search for web)") },
-                        maxLines = 3,
-                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp)
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Button(
-                            onClick = onSend,
-                            enabled = !sending && draft.isNotBlank(),
-                            modifier = Modifier.height(27.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Blue)
-                        ) { Text("SEND", color = Color.White, fontSize = 9.sp) }
-
-                    }
-                }
-                Text("PRIVATE BY DESIGN • /search FOR LIVE WEB SOURCES",
-                    color = Color(0xFF52647A), fontSize = 8.sp, letterSpacing = 0.8.sp,
-                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            }
+    when(selectedTab) {
+     "Home" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(9.dp)) {
+      Spacer(Modifier.height(2.dp))
+      ShadowOrb(listening= listening,onClick=onVoiceTap)
+      Text("YOUR PERSONAL AI",color=Color(0xFF83A6CE),fontSize=9.sp,letterSpacing=2.5.sp)
+      Text("I'm ready.\nWhat shall we do today?",color=Color(0xFFF3F7FF),fontSize=22.sp,lineHeight=28.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.Center)
+      Surface(color=Color(0xFF071E35),shape=RoundedCornerShape(24.dp)) { Text("✦  LLAMA 3.1  •  CLOUD AI",color=Ice,fontSize=11.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=18.dp,vertical=9.dp)) }
+      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+       ActionTile("AI CHAT","Ask anything","●",Modifier.weight(1f)) { selectedTab="Chat" }
+       ActionTile("WEB RESEARCH","Find sources","◎",Modifier.weight(1f)) { selectedTab="Chat"; if(!draft.startsWith("/search ")) onDraftChange("/search ") }
+      }
+      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+       ActionTile("BUILD PROJECT","Create apps & code","</>",Modifier.weight(1f)) { selectedTab="Studio"; if(!draft.startsWith("/build ")) onDraftChange("/build ") }
+       ActionTile("MY MEMORY","Saved context","✧",Modifier.weight(1f)) { showMemoryDialog=true }
+      }
+      Surface(color=Color(0xFF071A30),shape=RoundedCornerShape(20.dp),modifier=Modifier.fillMaxWidth().clickable(onClick=onVoiceTap)) {
+       Row(Modifier.padding(horizontal=14.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically) {
+        Text("🎙",fontSize=30.sp)
+        Column(Modifier.padding(start=14.dp)) {
+         Text(if(listening) "LISTENING TO YOU" else "TALK TO SHADOW",color=Color.White,fontWeight=FontWeight.Bold,fontSize=14.sp)
+         Text(if(listening) "Tap to stop listening" else "Tap to start voice",color=Ice,fontSize=11.sp)
         }
+        Spacer(Modifier.weight(1f)); Text("›",color=Ice,fontSize=30.sp)
+       }
+      }
+      Text(status,color=Color(0xFF91A4BD),fontSize=10.sp,textAlign=TextAlign.Center,maxLines=2)
+      Spacer(Modifier.weight(1f))
+     }
+     "Chat" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=10.dp)) {
+      Row(verticalAlignment=Alignment.CenterVertically) {
+       Text("AI CHAT",color=Color.White,fontSize=16.sp,fontWeight=FontWeight.Bold); Spacer(Modifier.weight(1f))
+       if(messages.isNotEmpty()) Text("CLEAR",color=Color(0xFFFF9A9A),fontSize=10.sp,modifier=Modifier.clickable { showClearConfirmation=true }.padding(8.dp))
+      }
+      if(messages.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center) {
+       Column(horizontalAlignment=Alignment.CenterHorizontally) { ShadowOrb(listening= listening,onClick=onVoiceTap); Text("Ask SHADOW anything",color=Color.White,fontSize=18.sp); Text("Cloud AI assistant • Hindi & English",color=Ice,fontSize=11.sp) }
+      } else LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=listState,verticalArrangement=Arrangement.spacedBy(10.dp)) {
+       items(messages) { message ->
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=if(message.role=="user") Arrangement.End else Arrangement.Start) {
+         Surface(color=if(message.role=="user") Color(0xFF12345A) else Color(0xFF101B2B),shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth(0.92f)) {
+          Column(Modifier.padding(12.dp)) { Text(if(message.role=="user") "YOU" else "SHADOW",color=Ice,fontSize=9.sp,fontWeight=FontWeight.Bold); Text(message.content,color=Color(0xFFE2EEFF),fontSize=13.sp) }
+         }
+        }
+       }
+       if(sending) item { Text("SHADOW is thinking…",color=Ice,fontSize=12.sp) }
+      }
+     }
+     "Studio" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+      Text("SHADOW STUDIO",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Bold)
+      Text("Describe an app or website. SHADOW will generate a starter project with editable source files.",color=Color(0xFFB9CBE1),fontSize=13.sp)
+      ActionTile("PROJECT BUILDER","Generate source files","</>",Modifier.fillMaxWidth()) { if(!draft.startsWith("/build ")) onDraftChange("/build ") }
+      if(hasExportableProject) {
+       Text("${projectFiles.size} project files available",color=Ice,fontSize=12.sp)
+       Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+        Button(onClick={ selectedProjectPath=projectFiles.firstOrNull()?.path.orEmpty(); projectFileDraft=projectFiles.firstOrNull()?.content.orEmpty(); showWorkspaceDialog=true }) { Text("WORKSPACE") }
+        Button(onClick=onExportProject) { Text("EXPORT ZIP") }
+       }
+      } else Text("No generated project yet. Enter your idea below and tap SEND.",color=Color(0xFF91A4BD),fontSize=11.sp)
+      Spacer(Modifier.weight(1f)); Text(status,color=Ice,fontSize=11.sp)
+     }
+     else -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+      Text("SETTINGS",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Bold)
+      Text("CLOUD CONNECTION",color=Ice,fontSize=10.sp,fontWeight=FontWeight.Bold)
+      OutlinedTextField(value=endpoint,onValueChange=onEndpointChange,modifier=Modifier.fillMaxWidth(),singleLine=true,label={ Text("Backend URL (HTTPS)") },textStyle=androidx.compose.ui.text.TextStyle(color=Color.White,fontSize=11.sp))
+      OutlinedTextField(value=apiToken,onValueChange=onApiTokenChange,modifier=Modifier.fillMaxWidth(),singleLine=true,label={ Text("Private access token") },visualTransformation=PasswordVisualTransformation(),textStyle=androidx.compose.ui.text.TextStyle(color=Color.White,fontSize=11.sp))
+      Text("RESPONSE LANGUAGE",color=Ice,fontSize=10.sp,fontWeight=FontWeight.Bold)
+      Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { listOf("Auto","Hindi","English").forEach { option -> Surface(color=if(responseLanguage==option) Color(0xFF173B63) else Color(0xFF101B2B),shape=RoundedCornerShape(20.dp),modifier=Modifier.clickable { onLanguageChange(option) }) { Text(option,color=Color.White,modifier=Modifier.padding(horizontal=13.dp,vertical=9.dp),fontSize=11.sp) } } }
+      Text("VOICE",color=Ice,fontSize=10.sp,fontWeight=FontWeight.Bold)
+      Row(verticalAlignment=Alignment.CenterVertically) { Text(if(voiceReplies) "Automatic voice replies ON" else "Automatic voice replies OFF",color=Color.White,modifier=Modifier.weight(1f),fontSize=12.sp); Button(onClick={onVoiceRepliesChange(!voiceReplies)}) { Text(if(voiceReplies) "TURN OFF" else "TURN ON") } }
+      Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { Button(onClick=onSpeakLatest) { Text("READ LAST") }; Button(onClick=onStopSpeaking) { Text("STOP VOICE") }; Button(onClick={showMemoryDialog=true}) { Text("MEMORY") } }
+      Text(status,color=Color(0xFF91A4BD),fontSize=10.sp); Spacer(Modifier.weight(1f))
+     }
     }
+    if(selectedTab!="Settings") Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+     Button(onClick=onVoiceTap,colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF132A46)),modifier=Modifier.height(50.dp)) { Text("🎙",color=Ice) }
+     OutlinedTextField(value=draft,onValueChange=onDraftChange,modifier=Modifier.weight(1f).padding(horizontal=7.dp),placeholder={ Text(if(selectedTab=="Studio") "Describe your app…" else "Message SHADOW…") },maxLines=2,textStyle=androidx.compose.ui.text.TextStyle(color=Color.White,fontSize=13.sp))
+     Button(onClick=onSend,enabled=!sending&&draft.isNotBlank(),colors=ButtonDefaults.buttonColors(containerColor=Blue),modifier=Modifier.height(50.dp)) { Text("➤",color=Color.White) }
+    }
+    Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceAround,verticalAlignment=Alignment.CenterVertically) {
+     listOf("Home","Chat","Studio","Settings").forEach { tab ->
+      Column(horizontalAlignment=Alignment.CenterHorizontally,modifier=Modifier.weight(1f).clickable { selectedTab=tab }.padding(vertical=5.dp)) {
+       Text(when(tab) { "Home"->"⌂"; "Chat"->"◌"; "Studio"->"▣"; else->"⚙" },color=if(selectedTab==tab) Ice else Color(0xFF91A4BD),fontSize=22.sp)
+       Text(tab,color=if(selectedTab==tab) Ice else Color(0xFF91A4BD),fontSize=10.sp,fontWeight=if(selectedTab==tab) FontWeight.Bold else FontWeight.Normal)
+       if(selectedTab==tab) Box(Modifier.padding(top=3.dp).size(width=34.dp,height=2.dp).background(Blue,RoundedCornerShape(2.dp)))
+      }
+     }
+    }
+   }
+  }
+ }
+
+@Composable
+private fun ActionTile(title:String,subtitle:String,symbol:String,modifier:Modifier=Modifier,onClick:()->Unit) {
+ Surface(color=Color(0xFF0A1B31),shape=RoundedCornerShape(16.dp),border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFF167DCA)),modifier=modifier.clickable(onClick=onClick)) {
+  Row(Modifier.padding(horizontal=10.dp,vertical=14.dp),verticalAlignment=Alignment.CenterVertically) {
+   Text(symbol,color=Ice,fontSize=22.sp,fontWeight=FontWeight.Bold)
+   Column(Modifier.padding(start=9.dp).weight(1f)) { Text(title,color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold); Text(subtitle,color=Color(0xFF9CB5D3),fontSize=9.sp,maxLines=2) }
+   Text("›",color=Blue,fontSize=22.sp)
+  }
+ }
+}
     if (showWorkspaceDialog) {
         AlertDialog(
             onDismissRequest = { showWorkspaceDialog = false },
