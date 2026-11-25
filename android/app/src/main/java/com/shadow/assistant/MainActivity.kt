@@ -159,7 +159,8 @@ class MainActivity : ComponentActivity() {
                 onStopSpeaking = { stopSpeaking() },
                 onClearChat = { clearConversation() },
                 onVoiceTap = { requestVoiceInput() },
-                onSend = { sendMessage() }
+                onSend = { sendMessage() },
+                onResearch = { researchWeb() }
             )
         }
     }
@@ -307,6 +308,84 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun researchWeb() {
+        val query = draft.trim()
+        val baseUrl = endpoint.trim().trimEnd('/')
+        if (query.isBlank() || sending) return
+        if (!baseUrl.startsWith("https://")) {
+            status = "Add your deployed HTTPS backend URL before researching"
+            return
+        }
+        if (query.length > 300) {
+            status = "Research query must be under 300 characters"
+            return
+        }
+        val updated = (chatMessages + ChatMessage("user", "Research: " + query)).takeLast(30)
+        chatMessages = updated
+        saveMessages(updated)
+        draft = ""
+        sending = true
+        status = "Searching sources…"
+        lifecycleScope.launch {
+            try {
+                val report = withContext(Dispatchers.IO) {
+                    val connection = (URL(baseUrl + "/api/research").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 12000
+                        readTimeout = 20000
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    try {
+                        val payload = JSONObject().put("query", query)
+                        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                        val code = connection.responseCode
+                        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        val json = runCatching { JSONObject(raw) }.getOrNull()
+                        if (code !in 200..299) {
+                            throw IllegalStateException(json?.optString("error")?.takeIf { it.isNotBlank() }
+                                ?: "Research server error ($code)")
+                        }
+                        val results = json?.optJSONArray("results") ?: JSONArray()
+                        buildString {
+                            append("RESEARCH RESULTS • ")
+                            append(json?.optString("provider") ?: "Source")
+                            append("\n\n")
+                            if (results.length() == 0) {
+                                append("No matching source cards were returned for this query.")
+                            } else {
+                                for (index in 0 until results.length()) {
+                                    val item = results.optJSONObject(index) ?: continue
+                                    append(index + 1).append(". ")
+                                    append(item.optString("title")).append("\n")
+                                    val snippet = item.optString("snippet")
+                                    if (snippet.isNotBlank()) append(snippet).append("\n")
+                                    append(item.optString("url")).append("\n\n")
+                                }
+                            }
+                            append(json?.optString("notice").orEmpty())
+                        }
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+                chatMessages = chatMessages + ChatMessage("assistant", report)
+                saveMessages(chatMessages)
+                status = "Research complete • open source links to verify"
+                if (voiceReplies) speakText("I found research sources. Please review the source links in the chat.")
+            } catch (error: Exception) {
+                chatMessages = chatMessages.dropLast(1)
+                saveMessages(chatMessages)
+                draft = query
+                status = error.message?.take(180) ?: "Research failed. Check your connection and backend."
+            } finally {
+                sending = false
+            }
+        }
+    }
+
     private fun clearConversation() {
         chatMessages = emptyList()
         saveMessages(emptyList())
@@ -406,7 +485,8 @@ private fun ShadowHome(
     onStopSpeaking: () -> Unit,
     onClearChat: () -> Unit,
     onVoiceTap: () -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    onResearch: () -> Unit
 ) {
     val listState = rememberLazyListState()
     var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
@@ -566,12 +646,22 @@ private fun ShadowHome(
                         maxLines = 3,
                         textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp)
                     )
-                    Button(
-                        onClick = onSend,
-                        enabled = !sending && draft.isNotBlank(),
-                        modifier = Modifier.height(54.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Blue)
-                    ) { Text("Send", color = Color.White) }
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Button(
+                            onClick = onSend,
+                            enabled = !sending && draft.isNotBlank(),
+                            modifier = Modifier.height(27.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Blue)
+                        ) { Text("SEND", color = Color.White, fontSize = 9.sp) }
+                        Button(
+                            onClick = onResearch,
+                            enabled = !sending && draft.isNotBlank(),
+                            modifier = Modifier.height(27.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 5.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF173B63))
+                        ) { Text("SEARCH", color = Ice, fontSize = 8.sp) }
+                    }
                 }
                 Text("PRIVATE BY DESIGN • REVIEW VOICE TEXT BEFORE SENDING",
                     color = Color(0xFF52647A), fontSize = 8.sp, letterSpacing = 0.8.sp,
