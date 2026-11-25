@@ -251,6 +251,8 @@ class MainActivity : ComponentActivity() {
 
     private fun sendMessage() {
         val prompt = draft.trim()
+        val codingMode = prompt.startsWith("/code ", ignoreCase = true)
+        val messageText = if (codingMode) prompt.substringAfter(' ').trim() else prompt
         // Local assistant commands share the same chat composer; no separate screen is required.
         if (handleLocalCommand(prompt)) return
         // Web research is a mode inside the same chat composer: type /search followed by a query.
@@ -265,13 +267,13 @@ class MainActivity : ComponentActivity() {
             status = "Add your deployed HTTPS backend URL below before chatting"
             return
         }
-        if (prompt.length > 6000) {
+        if (messageText.length > 6000) {
             status = "Message is too long. Keep it under 6,000 characters."
             return
         }
 
         // Keep the latest 30 messages to stay within the server's context limit.
-        val updated = (chatMessages + ChatMessage("user", prompt)).takeLast(30)
+        val updated = (chatMessages + ChatMessage("user", if (codingMode) "Coding task: " + messageText else messageText)).takeLast(30)
         chatMessages = updated
         saveMessages(updated)
         draft = ""
@@ -294,7 +296,7 @@ class MainActivity : ComponentActivity() {
                             updated.forEach { message ->
                                 put(JSONObject().put("role", message.role).put("content", message.content))
                             }
-                        }).put("language", when (responseLanguage) { "English" -> "en"; "Hindi" -> "hi"; else -> "auto" })
+                        }).put("language", when (responseLanguage) { "English" -> "en"; "Hindi" -> "hi"; else -> "auto" }).put("mode", if (codingMode) "coding" else "chat")
                         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
                         val code = connection.responseCode
                         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -329,7 +331,7 @@ class MainActivity : ComponentActivity() {
         val command = prompt.trim()
         val lower = command.lowercase(Locale.ROOT)
         val response = when {
-            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands"
+            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/code <task> — coding and debugging mode\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands"
             lower == "/memories" -> if (savedMemories.isEmpty()) {
                 "No saved memories yet. Use /remember <fact> to save one."
             } else {
