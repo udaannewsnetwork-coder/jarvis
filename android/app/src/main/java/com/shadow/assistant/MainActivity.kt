@@ -35,12 +35,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -155,6 +157,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onSpeakLatest = { speakLatestReply() },
                 onStopSpeaking = { stopSpeaking() },
+                onClearChat = { clearConversation() },
                 onVoiceTap = { requestVoiceInput() },
                 onSend = { sendMessage() }
             )
@@ -304,6 +307,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun clearConversation() {
+        chatMessages = emptyList()
+        saveMessages(emptyList())
+        draft = ""
+        status = "Conversation history cleared from this app"
+    }
+
     private fun speakLatestReply() {
         val latest = chatMessages.lastOrNull { it.role == "assistant" }?.content
         if (latest.isNullOrBlank()) {
@@ -394,10 +404,12 @@ private fun ShadowHome(
     onVoiceRepliesChange: (Boolean) -> Unit,
     onSpeakLatest: () -> Unit,
     onStopSpeaking: () -> Unit,
+    onClearChat: () -> Unit,
     onVoiceTap: () -> Unit,
     onSend: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -416,6 +428,10 @@ private fun ShadowHome(
                     Text("S", color = Ice, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text("  S H A D O W", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp)
                     Spacer(Modifier.weight(1f))
+                    if (messages.isNotEmpty()) {
+                        Text("CLEAR", color = Color(0xFFFF9A9A), fontSize = 9.sp,
+                            modifier = Modifier.clickable { showClearConfirmation = true }.padding(horizontal = 8.dp, vertical = 6.dp))
+                    }
                     Text(if (listening) "● LISTENING" else if (sending) "● THINKING" else "● READY",
                         color = if (listening || sending) Ice else Color(0xFF73D6A6), fontSize = 10.sp, letterSpacing = 1.sp)
                 }
@@ -557,6 +573,25 @@ private fun ShadowHome(
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
+    }
+    if (showClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation = false },
+            title = { Text("Clear this conversation?") },
+            text = { Text("This removes the saved chat history from this app on this device. It cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearConfirmation = false
+                    onClearChat()
+                }) { Text("Clear history") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmation = false }) { Text("Cancel") }
+            },
+            containerColor = Color(0xFF101B2B),
+            titleContentColor = Color.White,
+            textContentColor = Color(0xFFB8C9DD)
+        )
     }
 }
 
