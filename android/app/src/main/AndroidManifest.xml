@@ -10,6 +10,7 @@
     <application
         android:allowBackup="false"
         android:label="SHADOW"
+        android:icon="@drawable/shadow_logo"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
