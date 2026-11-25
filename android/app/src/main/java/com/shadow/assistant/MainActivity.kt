@@ -807,7 +807,7 @@ private fun ShadowHome(
     when(selectedTab) {
      "Home" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(9.dp)) {
       Spacer(Modifier.height(2.dp))
-      ShadowOrb(listening= listening,onClick=onVoiceTap)
+      HomeHeroBackdrop(listening= listening,onClick=onVoiceTap)
       Text("YOUR PERSONAL AI",color=Color(0xFF83A6CE),fontSize=9.sp,letterSpacing=2.5.sp)
       Text("I'm ready.\nWhat shall we do today?",color=Color(0xFFF3F7FF),fontSize=22.sp,lineHeight=28.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.Center)
       Surface(color=Color(0xFF071E35),shape=RoundedCornerShape(24.dp)) { Text("✦  LLAMA 3.1  •  CLOUD AI",color=Ice,fontSize=11.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=18.dp,vertical=9.dp)) }
@@ -1069,6 +1069,36 @@ private fun ShadowLogoMark(modifier: Modifier = Modifier) {
         drawCircle(color = Ice, radius = stroke * 0.7f,
             center = androidx.compose.ui.geometry.Offset(size.width * 0.75f, size.height * 0.22f))
     }
+}
+
+@Composable
+private fun HomeHeroBackdrop(listening: Boolean, onClick: () -> Unit) {
+ Box(Modifier.fillMaxWidth().height(252.dp), contentAlignment=Alignment.Center) {
+  Canvas(Modifier.fillMaxSize()) {
+   val w=size.width; val h=size.height
+   drawRect(brush=Brush.verticalGradient(listOf(Color(0xFF061A3A),Color(0xFF020711)),startY=0f,endY=h))
+   drawCircle(Color(0xFF8BBFFF).copy(alpha=0.20f),radius=42.dp.toPx(),center=androidx.compose.ui.geometry.Offset(w*0.86f,h*0.22f))
+   drawCircle(Color(0xFFB9D9FF).copy(alpha=0.16f),radius=34.dp.toPx(),center=androidx.compose.ui.geometry.Offset(w*0.86f,h*0.22f))
+   for(i in 0..34) {
+    val x=w*((i*37%101)/100f); val y=h*((i*19%67)/100f)
+    drawCircle(Ice.copy(alpha=0.18f+(i%4)*0.09f),radius=(i%3+1).dp.toPx()*0.45f,center=androidx.compose.ui.geometry.Offset(x,y))
+   }
+   val widths=floatArrayOf(.07f,.09f,.06f,.11f,.08f,.07f,.12f,.08f,.06f,.10f,.07f,.09f)
+   val heights=floatArrayOf(.27f,.42f,.34f,.52f,.31f,.44f,.58f,.35f,.48f,.30f,.43f,.25f)
+   var x=0f
+   for(i in widths.indices) {
+    val bw=w*widths[i]; val bh=h*heights[i]
+    drawRect(Color(0xFF07152B),androidx.compose.ui.geometry.Offset(x,h-bh),androidx.compose.ui.geometry.Size(bw+2f,bh))
+    for(row in 0..3) for(col in 0..1) {
+     val wx=x+bw*(0.24f+col*0.42f); val wy=h-bh+bh*(0.18f+row*0.17f)
+     drawRect(Color(0xFF1687D9).copy(alpha=0.28f),androidx.compose.ui.geometry.Offset(wx,wy),androidx.compose.ui.geometry.Size(2.2.dp.toPx(),3.dp.toPx()))
+    }
+    x+=bw
+   }
+   drawRect(brush=Brush.verticalGradient(listOf(Color.Transparent,Color(0xFF020711))),topLeft=androidx.compose.ui.geometry.Offset(0f,h*0.70f),size=androidx.compose.ui.geometry.Size(w,h*0.30f))
+  }
+  ShadowOrb(listening=listening,onClick=onClick)
+ }
 }
 
 @Composable
