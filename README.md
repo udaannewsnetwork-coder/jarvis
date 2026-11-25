@@ -1,48 +1,27 @@
-# JARVIS AI Assistant
+# SHADOW — Personal AI Assistant
 
-A JARVIS-inspired AI assistant built with Next.js and OpenAI.
+SHADOW is a cinematic personal AI assistant prototype built with Next.js, React and a server-side AI integration.
 
-## Features
-- JARVIS-style interface
-- Type / speak / record input
-- Audio transcription with Whisper
-- AI responses via OpenAI
-- Hindi and English support
-- Vercel-ready deployment structure
+## Current prototype
+- Futuristic dark assistant interface with a blue animated orb
+- Text chat and browser-based voice input
+- Audio recording and transcription endpoint
+- Hindi and English interface/voice settings
+- Spoken replies through browser speech synthesis
+- Server-side API key handling
 
 ## Local setup
-
 1. Install dependencies:
-   ```bash
-   npm install
-   ```
+   `npm install`
+2. Copy `.env.example` to `.env.local`.
+3. Add your server-side provider key to `.env.local`.
+4. Run `npm run dev` and open `http://localhost:3000`.
 
-2. Create `.env.local` from `.env.example`:
-   ```bash
-   cp .env.example .env.local
-   ```
-
-3. Add your OpenAI API key:
-   ```env
-   OPENAI_API_KEY=sk-your-key-here
-   ```
-
-4. Start the app:
-   ```bash
-   npm run dev
-   ```
-
-5. Open `http://localhost:3000`
-
-## Vercel deployment
-
-1. Push the repo to GitHub.
-2. Import the repo in Vercel.
-3. In Project Settings → Environment Variables, add:
-   - `OPENAI_API_KEY` = your OpenAI secret key
-4. Redeploy.
+## Android direction
+The Android APK will be a dedicated mobile client, not merely a website wrapper. It will use the shared backend, keep secrets out of the APK, request permissions only when needed, and include clear microphone/listening controls. See [Android APK roadmap](docs/ANDROID_APK_ROADMAP.md).
 
 ## Security
-- Do not commit real API keys to GitHub.
-- Keep `.env.local` local only.
-- Use Vercel environment variables for production deployments.
+- Never commit real API keys.
+- Keep provider secrets in server-side environment variables.
+- Device actions will require explicit user approval.
+- Do not describe a CI build as a real-device test.
