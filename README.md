@@ -25,3 +25,18 @@ The Android APK will be a dedicated mobile client, not merely a website wrapper.
 - Keep provider secrets in server-side environment variables.
 - Device actions will require explicit user approval.
 - Do not describe a CI build as a real-device test.
+
+## Background voice commands (experimental)
+
+Start background listening from the Android app and keep the visible SHADOW notification active. Say "Shadow" followed by a command:
+
+- "What time is it" — show the current time.
+- "What's the date" — show today's date.
+- "Battery status" — show the battery percentage.
+- "Set timer for 5 minutes" — post a timer-complete notification.
+- "Remind me in 20 minutes to drink water" — schedule a reminder.
+- "Volume up" / "Volume down" — adjust media volume.
+- "Open YouTube" — show a notification action to open the app.
+- "Search [query]" — show a notification action to open Google Search.
+
+Android may delay inexact reminders during Doze/battery-saving modes. App-opening and search actions require tapping OPEN in the notification. Background speech recognition uses the device's installed speech provider; it is not an offline low-power hotword engine. Test on a physical device before relying on it.
