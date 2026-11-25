@@ -102,6 +102,7 @@ internal data class ExternalPlugin(
 
 @Composable
 internal fun PluginHubScreen(
+    modifier: Modifier = Modifier,
     plugins: List<ExternalPlugin>,
     status: String,
     busy: Boolean,
@@ -114,7 +115,7 @@ internal fun PluginHubScreen(
     var actionPayload by remember { mutableStateOf("{}") }
     var selected by remember { mutableStateOf<Pair<String, PluginAction>?>(null) }
     var showImportHelp by remember { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+    Column(modifier = modifier.fillMaxWidth().padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("PLUGIN HUB", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text("Compatible HTTPS APIs ko manifest URL se connect karo. SHADOW sirf declared POST actions call karega; downloaded code/APK execute nahi hoga.",
