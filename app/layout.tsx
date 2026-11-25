@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'JARVIS | AI Assistant',
-  description: 'A cinematic JARVIS-inspired AI assistant prototype with voice support.',
+  title: 'SHADOW | AI Assistant',
+  description: 'A cinematic SHADOW-inspired AI assistant prototype with voice support.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
