@@ -77,6 +77,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestVoiceInput() {
+        if (listening) {
+            speechRecognizer?.cancel()
+            listening = false
+            status = "Voice listening stopped"
+            return
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status = "Speech recognition is not available on this device"
             return
