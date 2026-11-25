@@ -40,3 +40,31 @@ Start background listening from the Android app and keep the visible SHADOW noti
 - "Search [query]" — show a notification action to open Google Search.
 
 Android may delay inexact reminders during Doze/battery-saving modes. App-opening and search actions require tapping OPEN in the notification. Background speech recognition uses the device's installed speech provider; it is not an offline low-power hotword engine. Test on a physical device before relying on it.
+
+
+## Android Plugin Hub (experimental)
+
+The Android app includes a custom HTTPS plugin manifest importer. A provider publishes a JSON manifest such as:
+
+```json
+{
+  "schema_version": 1,
+  "id": "sample_tools",
+  "name": "Sample Tools",
+  "description": "Example external integration",
+  "base_url": "https://api.example.com",
+  "actions": [
+    {
+      "id": "create_note",
+      "name": "Create note",
+      "description": "Create a note in the connected service",
+      "path": "/v1/notes",
+      "requires_confirmation": true
+    }
+  ]
+}
+```
+
+Paste the manifest's HTTPS URL in the Android Plugin Hub. An optional bearer token is encrypted with Android Keystore on the device. Each action is shown in the app and requires a user confirmation; the app sends a JSON object to the declared relative path using HTTPS POST. Redirects are blocked, requests time out, response sizes are capped, and removing a plugin clears its saved token.
+
+This is a constrained first version, not a universal ChatGPT plugin marketplace: providers must publish a compatible manifest and HTTPS API. It does not download or execute plugin code, support arbitrary HTTP methods, or automatically grant access to Android private data. Review a provider before connecting it, and only connect services you trust.
