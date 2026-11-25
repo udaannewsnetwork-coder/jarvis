@@ -251,6 +251,8 @@ class MainActivity : ComponentActivity() {
 
     private fun sendMessage() {
         val prompt = draft.trim()
+        // Local assistant commands share the same chat composer; no separate screen is required.
+        if (handleLocalCommand(prompt)) return
         // Web research is a mode inside the same chat composer: type /search followed by a query.
         if (prompt.startsWith("/search ", ignoreCase = true)) {
             draft = prompt.substringAfter(' ').trim()
@@ -321,6 +323,51 @@ class MainActivity : ComponentActivity() {
                 sending = false
             }
         }
+    }
+
+    private fun handleLocalCommand(prompt: String): Boolean {
+        val command = prompt.trim()
+        val lower = command.lowercase(Locale.ROOT)
+        val response = when {
+            lower == "/help" -> "SHADOW CHAT COMMANDS\\n\\n/search <query> — search the web\\n/remember <fact> — save a memory on this device\\n/memories — view saved memory notes\\n/forget <exact note> — delete one saved memory\\n/help — show these commands"
+            lower == "/memories" -> if (savedMemories.isEmpty()) {
+                "No saved memories yet. Use /remember <fact> to save one."
+            } else {
+                "YOUR SAVED MEMORIES\\n\\n" + savedMemories.mapIndexed { index, memory -> "${index + 1}. $memory" }.joinToString("\\n")
+            }
+            lower.startsWith("/remember ") -> {
+                val memory = command.substringAfter(' ').trim()
+                when {
+                    memory.isBlank() -> "Add a fact after /remember."
+                    memory.length > 300 -> "Memory is too long. Keep it under 300 characters."
+                    savedMemories.any { it.equals(memory, ignoreCase = true) } -> "That memory is already saved."
+                    savedMemories.size >= 30 -> "Memory is full (30 notes). Delete one with /forget <exact note> first."
+                    else -> {
+                        addMemory(memory)
+                        "Saved on this device: $memory"
+                    }
+                }
+            }
+            lower.startsWith("/forget ") -> {
+                val memory = command.substringAfter(' ').trim()
+                val match = savedMemories.firstOrNull { it.equals(memory, ignoreCase = true) }
+                if (match == null) "I couldn't find that exact memory. Use /memories to see saved notes."
+                else {
+                    deleteMemory(match)
+                    "Deleted this memory from this device: $match"
+                }
+            }
+            lower == "/remember" -> "Use /remember <fact> to save a memory."
+            lower == "/forget" -> "Use /forget <exact note> to delete a saved memory."
+            else -> return false
+        }
+        val updated = (chatMessages + ChatMessage("user", command) + ChatMessage("assistant", response)).takeLast(30)
+        chatMessages = updated
+        saveMessages(updated)
+        draft = ""
+        status = "Local command complete"
+        if (voiceReplies) speakText(response)
+        return true
     }
 
     private fun researchWeb() {
