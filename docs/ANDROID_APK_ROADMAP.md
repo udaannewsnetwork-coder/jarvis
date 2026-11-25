@@ -36,5 +36,6 @@ SHADOW is a personal AI agent project, separate from SWASTHYA SAATHI. The produc
 - Chat UI posts to a configurable HTTPS backend URL; backend deployment and AI credentials are still required.
 - Local chat history and response-language preference are stored in app-private preferences.
 - On-device Android TextToSpeech prototype supports optional automatic spoken replies and a read-last/stop control. Voice quality and Hindi/English language availability depend on the device's installed TTS engine.
-- Latest voice/TTS and history changes are committed to the development branch. Their GitHub Actions build is pending; do not treat them as build-verified until the latest run succeeds.
-- Earlier foundation run 45523857759 passed CI. This is not physical-device testing or proof that every planned feature is implemented.
+- SHADOW logo is integrated as a native vector launcher icon and Compose header mark.
+- Initial research endpoint and Android SEARCH action return source titles, snippets and URLs. With TAVILY_API_KEY configured server-side, it uses Tavily web search. Without a key, it falls back to DuckDuckGo Instant Answer, which is a limited topic-summary service, not full web search. Source links should be opened and checked; search snippets are not independently verified facts.
+- The latest branding/research changes are committed to the development branch. Wait for the current GitHub Actions run before treating them as build-verified. This is not physical-device testing or proof that every planned feature is implemented.
