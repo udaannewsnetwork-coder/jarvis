@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
         apiToken = preferences.getString("cloud_ai_token", "").orEmpty()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
         voiceReplies = preferences.getBoolean("voice_replies", false)
-        backgroundWakeEnabled = preferences.getBoolean(BackgroundWakeService.KEY_ENABLED, false)
+        backgroundWakeEnabled = getSharedPreferences(BackgroundWakeService.PREFS, MODE_PRIVATE).getBoolean(BackgroundWakeService.KEY_ENABLED, false)
         generatedProjectJson = preferences.getString("generated_project_json", "").orEmpty()
         generatedProjectName = preferences.getString("generated_project_name", "shadow-project").orEmpty()
         projectFiles = parseProjectFiles(generatedProjectJson)
