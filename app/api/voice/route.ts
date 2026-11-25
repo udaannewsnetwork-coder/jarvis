@@ -37,15 +37,18 @@ export async function POST(request: NextRequest) {
     const completion = await client.chat.completions.create({
       model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
       messages: [
-        { role: "system", content: "You are JARVIS, a reliable personal AI assistant. Reply naturally in the same language as the user. Be accurate and concise." },
+        {
+          role: "system",
+          content: "You are SHADOW, a reliable all-purpose personal AI assistant. Reply naturally in the same language as the user, including Hindi or Hinglish. Help with learning, research, writing, coding and productivity. Be accurate and transparent. Never claim to have performed an external action unless a connected tool confirmed it."
+        },
         { role: "user", content: transcript }
       ],
       temperature: 0.6,
-      max_tokens: 700
+      max_tokens: 900
     });
     return Response.json({ transcript, reply: completion.choices[0]?.message?.content || "I am ready to help." });
   } catch (error) {
-    console.error("Voice route error:", error);
+    console.error("SHADOW voice route error:", error);
     return Response.json({ error: "Voice processing failed. Please try a shorter recording and try again." }, { status: 500 });
   }
 }
