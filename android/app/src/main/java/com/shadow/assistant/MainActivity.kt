@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
@@ -89,6 +90,7 @@ class MainActivity : ComponentActivity() {
     private var listening by mutableStateOf(false)
     private var sending by mutableStateOf(false)
     private var endpoint by mutableStateOf("")
+    private var apiToken by mutableStateOf("")
     private var responseLanguage by mutableStateOf("Auto")
     private var voiceReplies by mutableStateOf(false)
     private var speaking by mutableStateOf(false)
@@ -118,6 +120,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val preferences = getPreferences(MODE_PRIVATE)
         endpoint = preferences.getString("backend_url", "").orEmpty()
+        apiToken = preferences.getString("cloud_ai_token", "").orEmpty()
         responseLanguage = preferences.getString("response_language", "Auto").orEmpty()
         voiceReplies = preferences.getBoolean("voice_replies", false)
         generatedProjectJson = preferences.getString("generated_project_json", "").orEmpty()
@@ -160,6 +163,7 @@ class MainActivity : ComponentActivity() {
                 status = status,
                 draft = draft,
                 endpoint = endpoint,
+                apiToken = apiToken,
                 responseLanguage = responseLanguage,
                 voiceReplies = voiceReplies,
                 speaking = speaking,
@@ -171,6 +175,10 @@ class MainActivity : ComponentActivity() {
                 onEndpointChange = {
                     endpoint = it
                     getPreferences(MODE_PRIVATE).edit().putString("backend_url", it).apply()
+                },
+                onApiTokenChange = {
+                    apiToken = it
+                    getPreferences(MODE_PRIVATE).edit().putString("cloud_ai_token", it).apply()
                 },
                 onLanguageChange = {
                     responseLanguage = it
@@ -321,6 +329,7 @@ class MainActivity : ComponentActivity() {
                         doOutput = true
                         setRequestProperty("Content-Type", "application/json; charset=utf-8")
                         setRequestProperty("Accept", "application/json")
+                        setRequestProperty("Authorization", "Bearer $apiToken")
                     }
                     try {
                         val payload = JSONObject().put("memories", JSONArray().apply { savedMemories.forEach { put(it) } }).put("messages", JSONArray().apply {
@@ -760,6 +769,7 @@ private fun ShadowHome(
     status: String,
     draft: String,
     endpoint: String,
+    apiToken: String,
     responseLanguage: String,
     voiceReplies: Boolean,
     speaking: Boolean,
@@ -769,6 +779,7 @@ private fun ShadowHome(
     sending: Boolean,
     onDraftChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
+    onApiTokenChange: (String) -> Unit,
     onLanguageChange: (String) -> Unit,
     onVoiceRepliesChange: (Boolean) -> Unit,
     onSpeakLatest: () -> Unit,
@@ -958,6 +969,16 @@ private fun ShadowHome(
                     label = { Text("Backend URL (HTTPS)") },
                     placeholder = { Text("https://your-shadow-server.example") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 12.sp)
+                )
+                OutlinedTextField(
+                    value = apiToken,
+                    onValueChange = onApiTokenChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Cloud AI access token") },
+                    placeholder = { Text("Paste your private SHADOW token") },
+                    visualTransformation = PasswordVisualTransformation(),
                     textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 12.sp)
                 )
                 Spacer(Modifier.height(8.dp))
