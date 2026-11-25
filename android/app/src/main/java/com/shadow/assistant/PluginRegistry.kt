@@ -28,15 +28,6 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
-import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.Base64
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 internal data class PluginAction(
     val id: String,
@@ -195,46 +186,5 @@ internal fun PluginHubScreen(
             dismissButton = { TextButton(onClick = { selected = null }) { Text("CANCEL") } },
             containerColor = Color(0xFF101B2B), titleContentColor = Color.White, textContentColor = Color(0xFFB8C9DD)
         )
-    }
-}
-
-
-internal object PluginSecretStore {
-    private const val PREFS = "shadow_manifest_plugin_secrets"
-    private const val KEY_ALIAS = "shadow_manifest_plugin_aes"
-    private const val TRANSFORMATION = "AES/GCM/NoPadding"
-
-    fun write(context: Context, id: String, secret: String) {
-        if (secret.isBlank()) { clear(context, id); return }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val packed = cipher.iv + cipher.doFinal(secret.toByteArray(Charsets.UTF_8))
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("secret_" + id, Base64.encodeToString(packed, Base64.NO_WRAP)).apply()
-    }
-
-    fun read(context: Context, id: String): String? = runCatching {
-        val encoded = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString("secret_" + id, null) ?: return null
-        val packed = Base64.decode(encoded, Base64.NO_WRAP)
-        require(packed.size > 12)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, packed.copyOfRange(0, 12)))
-        String(cipher.doFinal(packed.copyOfRange(12, packed.size)), Charsets.UTF_8)
-    }.getOrNull()
-
-    fun clear(context: Context, id: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("secret_" + id).apply()
-    }
-
-    private fun key(): SecretKey {
-        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (store.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        generator.init(KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true).build())
-        return generator.generateKey()
     }
 }
