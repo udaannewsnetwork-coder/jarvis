@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,6 +47,24 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+
+internal data class ShadowPlugin(
+    val id: String,
+    val name: String,
+    val description: String,
+    val capability: String,
+    val execution: String,
+    val permissionNote: String
+)
+
+internal object ShadowPluginRegistry {
+    val builtIns = listOf(
+        ShadowPlugin("web_research", "Web Research", "Search the web and summarize useful sources.", "research.search", "SHADOW backend route", "Internet access and configured research provider"),
+        ShadowPlugin("project_builder", "Project Builder", "Generate editable starter project source files.", "studio.generate", "SHADOW backend route", "Configured AI backend; generated code is preview-only"),
+        ShadowPlugin("android_actions", "Android Quick Actions", "Open supported apps, run searches and adjust media volume.", "android.intent", "Native Android intents", "Android app availability; user taps action notifications where required"),
+        ShadowPlugin("reminders", "Reminders & Timers", "Schedule reminder and timer notifications.", "device.reminder", "Android AlarmManager", "Notification permission; delivery may be delayed by Doze")
+    )
+}
 
 internal data class ConnectedShadowPlugin(
     val id: String,
