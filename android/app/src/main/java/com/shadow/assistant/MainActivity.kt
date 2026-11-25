@@ -76,6 +76,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 private data class ChatMessage(val role: String, val content: String)
+private data class ProjectFile(val path: String, val content: String)
 
 class MainActivity : ComponentActivity() {
     private var status by mutableStateOf("Your assistant is standing by")
@@ -93,6 +94,7 @@ class MainActivity : ComponentActivity() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var generatedProjectJson by mutableStateOf("")
     private var generatedProjectName by mutableStateOf("shadow-project")
+    private var projectFiles by mutableStateOf(listOf<ProjectFile>())
 
     private val exportProjectLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
@@ -115,6 +117,7 @@ class MainActivity : ComponentActivity() {
         voiceReplies = preferences.getBoolean("voice_replies", false)
         generatedProjectJson = preferences.getString("generated_project_json", "").orEmpty()
         generatedProjectName = preferences.getString("generated_project_name", "shadow-project").orEmpty()
+        projectFiles = parseProjectFiles(generatedProjectJson)
         textToSpeech = TextToSpeech(this) { result ->
             ttsReady = result == TextToSpeech.SUCCESS
             if (ttsReady) {
@@ -183,7 +186,9 @@ class MainActivity : ComponentActivity() {
                 onSend = { sendMessage() },
                 onResearch = { researchWeb() },
                 hasExportableProject = generatedProjectJson.isNotBlank(),
-                onExportProject = { exportProjectLauncher.launch("${generatedProjectName}.zip") }
+                projectFiles = projectFiles,
+                onExportProject = { exportProjectLauncher.launch("${generatedProjectName}.zip") },
+                onSaveProjectFile = { path, content -> saveProjectFile(path, content) }
             )
         }
     }
@@ -447,6 +452,7 @@ class MainActivity : ComponentActivity() {
                 }
                 generatedProjectName = replyResult.first.replace(Regex("[^a-zA-Z0-9_-]"), "-").take(60).ifBlank { "shadow-project" }
                 generatedProjectJson = replyResult.third
+                projectFiles = parseProjectFiles(generatedProjectJson)
                 getPreferences(MODE_PRIVATE).edit()
                     .putString("generated_project_json", generatedProjectJson)
                     .putString("generated_project_name", generatedProjectName)
@@ -464,6 +470,31 @@ class MainActivity : ComponentActivity() {
                 sending = false
             }
         }
+    }
+
+    private fun parseProjectFiles(raw: String): List<ProjectFile> = runCatching {
+        val files = JSONObject(raw).optJSONArray("files") ?: return@runCatching emptyList()
+        (0 until files.length()).mapNotNull { index ->
+            val item = files.optJSONObject(index) ?: return@mapNotNull null
+            val path = item.optString("path")
+            val content = item.optString("content")
+            if (path.isNotBlank() && content.length <= 12000) ProjectFile(path, content) else null
+        }.take(10)
+    }.getOrDefault(emptyList())
+
+    private fun saveProjectFile(path: String, content: String) {
+        if (content.length > 12000) { status = "File is too large to save (12,000 character limit)"; return }
+        val updatedFiles = projectFiles.map { file -> if (file.path == path) file.copy(content = content) else file }
+        if (updatedFiles.none { it.path == path }) { status = "Selected project file could not be found"; return }
+        if (updatedFiles.sumOf { it.content.length } > 40000) { status = "Project exceeds the 40,000 character export limit"; return }
+        val json = JSONObject(generatedProjectJson)
+        val array = JSONArray()
+        updatedFiles.forEach { file -> array.put(JSONObject().put("path", file.path).put("content", file.content)) }
+        json.put("files", array)
+        generatedProjectJson = json.toString()
+        projectFiles = updatedFiles
+        getPreferences(MODE_PRIVATE).edit().putString("generated_project_json", generatedProjectJson).apply()
+        status = "Saved " + path + " on this device • EXPORT ZIP to download the updated project"
     }
 
     private fun exportProjectZip(uri: android.net.Uri) {
@@ -713,12 +744,17 @@ private fun ShadowHome(
     onSend: () -> Unit,
     onResearch: () -> Unit,
     hasExportableProject: Boolean,
-    onExportProject: () -> Unit
+    projectFiles: List<ProjectFile>,
+    onExportProject: () -> Unit,
+    onSaveProjectFile: (String, String) -> Unit
 ) {
     val listState = rememberLazyListState()
     var showClearConfirmation by androidx.compose.runtime.remember { mutableStateOf(false) }
     var showMemoryDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
     var memoryDraft by androidx.compose.runtime.remember { mutableStateOf("") }
+    var showWorkspaceDialog by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var selectedProjectPath by androidx.compose.runtime.remember { mutableStateOf("") }
+    var projectFileDraft by androidx.compose.runtime.remember { mutableStateOf("") }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -743,6 +779,12 @@ private fun ShadowHome(
                     }
                     Spacer(Modifier.weight(1f))
                     if (hasExportableProject) {
+                        Text("WORKSPACE", color = Ice, fontSize = 9.sp,
+                            modifier = Modifier.clickable {
+                                selectedProjectPath = projectFiles.firstOrNull()?.path.orEmpty()
+                                projectFileDraft = projectFiles.firstOrNull()?.content.orEmpty()
+                                showWorkspaceDialog = true
+                            }.padding(horizontal = 6.dp, vertical = 6.dp))
                         Text("EXPORT ZIP", color = Ice, fontSize = 9.sp,
                             modifier = Modifier.clickable(onClick = onExportProject).padding(horizontal = 6.dp, vertical = 6.dp))
                     }
@@ -913,6 +955,42 @@ private fun ShadowHome(
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
+    }
+    if (showWorkspaceDialog) {
+        AlertDialog(
+            onDismissRequest = { showWorkspaceDialog = false },
+            title = { Text("Project Workspace") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(projectFiles.size.toString() + " source files • edits are saved locally", color = Color(0xFFB8C9DD), fontSize = 11.sp)
+                    projectFiles.forEach { file ->
+                        Surface(color = if (selectedProjectPath == file.path) Color(0xFF173B63) else Color(0xFF101B2B),
+                            shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().clickable {
+                                selectedProjectPath = file.path
+                                projectFileDraft = file.content
+                            }) {
+                            Text(file.path, color = if (selectedProjectPath == file.path) Ice else Color(0xFFE2EEFF),
+                                fontSize = 11.sp, modifier = Modifier.padding(9.dp))
+                        }
+                    }
+                    if (selectedProjectPath.isNotBlank()) {
+                        Text("EDITING: " + selectedProjectPath, color = Ice, fontSize = 10.sp)
+                        OutlinedTextField(value = projectFileDraft, onValueChange = { projectFileDraft = it },
+                            modifier = Modifier.fillMaxWidth().height(260.dp), minLines = 8, maxLines = 14,
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (selectedProjectPath.isNotBlank()) onSaveProjectFile(selectedProjectPath, projectFileDraft)
+                    showWorkspaceDialog = false
+                }, enabled = selectedProjectPath.isNotBlank()) { Text("SAVE FILE") }
+            },
+            dismissButton = { TextButton(onClick = { showWorkspaceDialog = false }) { Text("CLOSE") } },
+            containerColor = Color(0xFF101B2B), titleContentColor = Color.White, textContentColor = Color(0xFFB8C9DD)
+        )
     }
     if (showMemoryDialog) {
         AlertDialog(
