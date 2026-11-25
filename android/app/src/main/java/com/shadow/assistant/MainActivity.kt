@@ -430,13 +430,14 @@ class MainActivity : ComponentActivity() {
                         val code = connection.responseCode
                         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                         val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                        val json = runCatching { JSONObject(raw) }.getOrNull()
+                        val parsedJson = runCatching { JSONObject(raw) }.getOrNull()
                         if (code !in 200..299) {
-                            throw IllegalStateException(json?.optString("error")?.takeIf { it.isNotBlank() }
+                            throw IllegalStateException(parsedJson?.optString("error")?.takeIf { it.isNotBlank() }
                                 ?: "Builder server error ($code)")
                         }
-                        val projectName = json?.optString("projectName")?.takeIf { it.isNotBlank() } ?: "shadow-project"
-                        val files = json?.optJSONArray("files")
+                        val json = parsedJson ?: throw IllegalStateException("The builder returned invalid JSON.")
+                        val projectName = json.optString("projectName").takeIf { it.isNotBlank() } ?: "shadow-project"
+                        val files = json.optJSONArray("files")
                         if (files == null || files.length() !in 2..10) throw IllegalStateException("The builder returned an invalid project file list.")
                         Triple(projectName, json.optString("reply").takeIf { it.isNotBlank() }
                             ?: throw IllegalStateException("The builder returned an empty project preview."), json.toString())
@@ -444,7 +445,7 @@ class MainActivity : ComponentActivity() {
                         connection.disconnect()
                     }
                 }
-                generatedProjectName = replyResult.first
+                generatedProjectName = replyResult.first.replace(Regex("[^a-zA-Z0-9_-]"), "-").take(60).ifBlank { "shadow-project" }
                 generatedProjectJson = replyResult.third
                 getPreferences(MODE_PRIVATE).edit()
                     .putString("generated_project_json", generatedProjectJson)
