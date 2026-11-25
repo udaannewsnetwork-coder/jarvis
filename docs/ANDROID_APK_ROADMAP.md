@@ -1,29 +1,34 @@
-# JARVIS Android APK Roadmap
+# SHADOW Android APK Roadmap
 
-This repository is the JARVIS assistant project. The Android application will be built as a dedicated Android client, sharing the assistant API and product identity without mixing this project with SWASTHYA SAATHI.
+SHADOW is a personal AI agent project, separate from SWASTHYA SAATHI. The product architecture and phased feature plan live in [SHADOW Product Blueprint](SHADOW_PRODUCT_BLUEPRINT.md).
 
 ## Product target
-- Professional Android experience with a polished dark, cinematic interface.
-- Chat, Hindi/English voice input, spoken replies, settings and conversation history.
-- Clear online/offline and microphone permission states; never show ONLINE unless a health check confirms it.
-- Secure server-side AI credentials. No API key is shipped inside the APK.
+- Professional native Android app with a cinematic dark interface and blue assistant orb.
+- Hindi/English chat and voice, spoken replies, settings and conversation history.
+- Shared backend for assistant reasoning, memory, research and safe tools.
+- Honest connection and permission states; never show ONLINE unless a health check confirms it.
+- Secure server-side AI credentials. No provider key is shipped inside the APK.
 - Android-native capabilities added incrementally and permission-gated.
 
 ## Delivery phases
-1. Stabilize the existing Next.js assistant and API routes.
-2. Add durable conversation memory with user controls and export/delete.
-3. Add optional web research with source links and clear freshness indicators.
-4. Add an Android client (native Kotlin preferred) with a shared backend contract.
-5. Add wake-word/background listening only after battery, privacy and Android permission behavior are tested.
-6. Add an explicit approval layer for actions that affect files, apps, accounts or device settings.
-7. Build signed debug APKs in CI; prepare a release-signed APK only with a user-owned signing key.
+1. Stabilize and test the existing Next.js prototype and API routes.
+2. Complete the native Android shell: chat UI, voice input, settings, history and lifecycle handling.
+3. Connect the Android app to an authenticated shared assistant API.
+4. Add durable conversation memory with user controls, export and deletion.
+5. Add optional web research with source links and retrieval timestamps.
+6. Add code/app creation in isolated build workers with diffs, logs and downloadable artifacts.
+7. Add task tools with least privilege, previews, explicit approval, cancellation and audit history.
+8. Add supported Android integrations such as TTS, reminders, share sheet and file picker.
+9. Consider wake-word/background listening only after battery, privacy and Android permission behavior are tested.
 
 ## APK engineering requirements
 - Do not embed provider API keys or signing passwords in source code or APK assets.
 - Store local preferences and tokens using Android secure storage.
 - Request microphone and notification permissions only when the feature is used.
 - Keep a visible microphone/listening indicator and an immediate stop control.
+- Do not silently install apps or execute generated code on the phone.
 - Test on a real Android device before describing a build as device-tested.
+- Use a user-owned signing key for release builds; never commit the key or passwords.
 
-## Current limitation
-The existing repository is a Next.js web prototype, not an Android project yet. A successful web build does not mean an APK exists. APK work begins after the shared API and UX foundations are stable.
+## Current verified scope
+The development branch contains a native Kotlin/Jetpack Compose Android scaffold and a basic Android speech-recognition flow. The current voice flow displays recognized text but is not yet connected to the AI backend. GitHub Actions run 45523247995 completed successfully for the foundation commit; this is CI evidence only, not physical-device testing or proof that every planned feature is implemented.
