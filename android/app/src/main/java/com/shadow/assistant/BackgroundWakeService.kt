@@ -144,6 +144,7 @@ class BackgroundWakeService : Service() {
                     .adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 updateNotification("Done • volume decreased")
             }
+            scheduleReminderIfRequested(command) -> Unit
             lower.startsWith("search ") || lower.startsWith("google ") -> {
                 val query = command.substringAfter(' ').trim()
                 if (query.isNotBlank()) {
@@ -171,6 +172,36 @@ class BackgroundWakeService : Service() {
             }
             else -> updateNotification("Command not supported yet • try “open YouTube” or “volume up”")
         }
+    }
+
+    private fun scheduleReminderIfRequested(command: String): Boolean {
+        val patterns = listOf(
+            Regex("(?i)(?:remind me|reminder|yaad dilana|yaad dila dena|mujhe yaad dilana)\\s+(?:in\\s+)?(\\d+)\\s*(minutes?|mins?|min|hours?|hrs?|hr|ghante|ghanta)\\s*(?:to|about|ke liye|baad)?\\s*(.*)"),
+            Regex("(?i)(\\d+)\\s*(minutes?|mins?|min|hours?|hrs?|hr|ghante|ghanta)\\s*(?:baad|later)\\s*(?:remind me|yaad dilana)?\\s*(.*)")
+        )
+        val match = patterns.firstNotNullOfOrNull { it.find(command) } ?: return false
+        val amount = match.groupValues[1].toLongOrNull() ?: return false
+        val unit = match.groupValues[2].lowercase(Locale.ROOT)
+        if (amount !in 1..10080) {
+            updateNotification("Reminder time must be between 1 minute and 7 days")
+            return true
+        }
+        val factor = if (unit.startsWith("h") || unit.startsWith("gh")) 3_600_000L else 60_000L
+        val note = match.groupValues[3].trim().ifBlank { "Your SHADOW reminder" }.take(180)
+        val alarm = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
+        val reminderIntent = Intent(this, ReminderReceiver::class.java).putExtra(ReminderReceiver.EXTRA_TEXT, note)
+        val requestCode = (note + System.currentTimeMillis()).hashCode()
+        val pending = PendingIntent.getBroadcast(
+            this, requestCode, reminderIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarm.setAndAllowWhileIdle(
+            android.app.AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + amount * factor,
+            pending
+        )
+        updateNotification("Reminder set in $amount $unit: $note")
+        return true
     }
 
     private fun showActionNotification(message: String, target: Intent) {
