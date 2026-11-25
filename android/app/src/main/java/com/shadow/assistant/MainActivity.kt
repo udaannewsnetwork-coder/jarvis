@@ -242,6 +242,12 @@ class MainActivity : ComponentActivity() {
 
     private fun sendMessage() {
         val prompt = draft.trim()
+        // Web research is a mode inside the same chat composer: type /search followed by a query.
+        if (prompt.startsWith("/search ", ignoreCase = true)) {
+            draft = prompt.substringAfter(' ').trim()
+            researchWeb()
+            return
+        }
         val baseUrl = endpoint.trim().trimEnd('/')
         if (prompt.isBlank() || sending) return
         if (!baseUrl.startsWith("https://")) {
@@ -642,7 +648,7 @@ private fun ShadowHome(
                         value = draft,
                         onValueChange = onDraftChange,
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("Message SHADOW…") },
+                        placeholder = { Text("Message SHADOW…  (/search for web)") },
                         maxLines = 3,
                         textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp)
                     )
@@ -654,16 +660,10 @@ private fun ShadowHome(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Blue)
                         ) { Text("SEND", color = Color.White, fontSize = 9.sp) }
-                        Button(
-                            onClick = onResearch,
-                            enabled = !sending && draft.isNotBlank(),
-                            modifier = Modifier.height(27.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 5.dp, vertical = 0.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF173B63))
-                        ) { Text("SEARCH", color = Ice, fontSize = 8.sp) }
+
                     }
                 }
-                Text("PRIVATE BY DESIGN • REVIEW VOICE TEXT BEFORE SENDING",
+                Text("PRIVATE BY DESIGN • /search FOR LIVE WEB SOURCES",
                     color = Color(0xFF52647A), fontSize = 8.sp, letterSpacing = 0.8.sp,
                     textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
