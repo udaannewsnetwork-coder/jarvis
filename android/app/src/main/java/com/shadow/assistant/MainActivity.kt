@@ -263,8 +263,17 @@ class MainActivity : ComponentActivity() {
                     try {
                         val code = connection.responseCode
                         require(code in 200..299) { "Manifest server returned HTTP $code (redirects blocked)" }
-                        val raw = connection.inputStream.bufferedReader().use { it.readText() }
-                        require(raw.length <= 64000) { "Manifest exceeds 64 KB" }
+                        val raw = connection.inputStream.bufferedReader().use { reader ->
+                            val out = StringBuilder()
+                            val buffer = CharArray(4096)
+                            while (true) {
+                                val count = reader.read(buffer)
+                                if (count < 0) break
+                                require(out.length + count <= 64000) { "Manifest exceeds 64 KB" }
+                                out.append(buffer, 0, count)
+                            }
+                            out.toString()
+                        }
                         ExternalPlugin.parse(raw)
                     } finally { connection.disconnect() }
                 }
@@ -316,8 +325,17 @@ class MainActivity : ComponentActivity() {
                         connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                         val code = connection.responseCode
                         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-                        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                        require(raw.length <= 32000) { "Plugin response exceeds 32 KB" }
+                        val raw = stream?.bufferedReader()?.use { reader ->
+                            val out = StringBuilder()
+                            val buffer = CharArray(2048)
+                            while (true) {
+                                val count = reader.read(buffer)
+                                if (count < 0) break
+                                require(out.length + count <= 32000) { "Plugin response exceeds 32 KB" }
+                                out.append(buffer, 0, count)
+                            }
+                            out.toString()
+                        }.orEmpty()
                         require(code in 200..299) { "Plugin returned HTTP " + code + ": " + raw.take(300) }
                         raw.ifBlank { "Plugin action completed successfully (empty response)." }
                     } finally { connection.disconnect() }
