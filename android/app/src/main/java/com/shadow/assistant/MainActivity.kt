@@ -993,7 +993,7 @@ private fun ShadowHome(
      }
     }
     when(selectedTab) {
-     "Plugins" -> PluginHubScreen(plugins=externalPlugins,status=pluginStatus,busy=pluginBusy,onImport=onImportPlugin,onRun=onRunPlugin,onDisconnect=onDisconnectPlugin)
+     "Plugins" -> PluginHubScreen(modifier=Modifier.weight(1f),plugins=externalPlugins,status=pluginStatus,busy=pluginBusy,onImport=onImportPlugin,onRun=onRunPlugin,onDisconnect=onDisconnectPlugin)
      "Home" -> Column(Modifier.weight(1f).fillMaxWidth().padding(top=8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(9.dp)) {
       Spacer(Modifier.height(2.dp))
       HomeHeroBackdrop(listening= listening,onClick=onVoiceTap)
