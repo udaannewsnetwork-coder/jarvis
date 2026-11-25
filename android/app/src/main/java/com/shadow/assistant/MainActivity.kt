@@ -894,16 +894,6 @@ private fun ShadowHome(
   }
  }
 
-@Composable
-private fun ActionTile(title:String,subtitle:String,symbol:String,modifier:Modifier=Modifier,onClick:()->Unit) {
- Surface(color=Color(0xFF0A1B31),shape=RoundedCornerShape(16.dp),border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFF167DCA)),modifier=modifier.clickable(onClick=onClick)) {
-  Row(Modifier.padding(horizontal=10.dp,vertical=14.dp),verticalAlignment=Alignment.CenterVertically) {
-   Text(symbol,color=Ice,fontSize=22.sp,fontWeight=FontWeight.Bold)
-   Column(Modifier.padding(start=9.dp).weight(1f)) { Text(title,color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold); Text(subtitle,color=Color(0xFF9CB5D3),fontSize=9.sp,maxLines=2) }
-   Text("›",color=Blue,fontSize=22.sp)
-  }
- }
-}
     if (showWorkspaceDialog) {
         AlertDialog(
             onDismissRequest = { showWorkspaceDialog = false },
@@ -1039,6 +1029,17 @@ private fun ActionTile(title:String,subtitle:String,symbol:String,modifier:Modif
             textContentColor = Color(0xFFB8C9DD)
         )
     }
+}
+
+@Composable
+private fun ActionTile(title:String,subtitle:String,symbol:String,modifier:Modifier=Modifier,onClick:()->Unit) {
+ Surface(color=Color(0xFF0A1B31),shape=RoundedCornerShape(16.dp),border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFF167DCA)),modifier=modifier.clickable(onClick=onClick)) {
+  Row(Modifier.padding(horizontal=10.dp,vertical=14.dp),verticalAlignment=Alignment.CenterVertically) {
+   Text(symbol,color=Ice,fontSize=22.sp,fontWeight=FontWeight.Bold)
+   Column(Modifier.padding(start=9.dp).weight(1f)) { Text(title,color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold); Text(subtitle,color=Color(0xFF9CB5D3),fontSize=9.sp,maxLines=2) }
+   Text("›",color=Blue,fontSize=22.sp)
+  }
+ }
 }
 
 @Composable
