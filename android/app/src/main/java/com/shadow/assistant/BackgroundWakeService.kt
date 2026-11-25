@@ -10,6 +10,7 @@ import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.BatteryManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -18,6 +19,8 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.core.app.NotificationCompat
 import java.util.Locale
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * User-started background voice trigger.
@@ -144,6 +147,19 @@ class BackgroundWakeService : Service() {
                     .adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                 updateNotification("Done • volume decreased")
             }
+            lower in listOf("time", "what time is it", "current time", "kitne baje hain", "samay kya hua") -> {
+                val now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
+                updateNotification("Current time • $now")
+            }
+            lower in listOf("date", "today's date", "what is the date", "aaj ki date", "aaj kaun si date hai") -> {
+                val today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.getDefault()))
+                updateNotification("Today's date • $today")
+            }
+            lower.contains("battery") || lower.contains("battery status") || lower.contains("battery kitni") -> {
+                val battery = getSystemService(BATTERY_SERVICE) as BatteryManager
+                val level = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                updateNotification(if (level in 0..100) "Battery level • $level%" else "Battery level unavailable")
+            }
             scheduleReminderIfRequested(command) -> Unit
             lower.startsWith("search ") || lower.startsWith("google ") -> {
                 val query = command.substringAfter(' ').trim()
@@ -176,6 +192,7 @@ class BackgroundWakeService : Service() {
 
     private fun scheduleReminderIfRequested(command: String): Boolean {
         val patterns = listOf(
+            Regex("(?i)(?:set|start)\\s+(?:a\\s+)?timer\\s+(?:for\\s+)?(\\d+)\\s*(minutes?|mins?|min|hours?|hrs?|hr|ghante|ghanta)\\s*(.*)"),
             Regex("(?i)(?:remind me|reminder|yaad dilana|yaad dila dena|mujhe yaad dilana)\\s+(?:in\\s+)?(\\d+)\\s*(minutes?|mins?|min|hours?|hrs?|hr|ghante|ghanta)\\s*(?:to|about|ke liye|baad)?\\s*(.*)"),
             Regex("(?i)(\\d+)\\s*(minutes?|mins?|min|hours?|hrs?|hr|ghante|ghanta)\\s*(?:baad|later)\\s*(?:remind me|yaad dilana)?\\s*(.*)")
         )
@@ -187,7 +204,8 @@ class BackgroundWakeService : Service() {
             return true
         }
         val factor = if (unit.startsWith("h") || unit.startsWith("gh")) 3_600_000L else 60_000L
-        val note = match.groupValues[3].trim().ifBlank { "Your SHADOW reminder" }.take(180)
+        val isTimer = command.lowercase(Locale.ROOT).contains("timer")
+        val note = match.groupValues[3].trim().ifBlank { if (isTimer) "Your SHADOW timer is complete" else "Your SHADOW reminder" }.take(180)
         val alarm = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
         val reminderIntent = Intent(this, ReminderReceiver::class.java).putExtra(ReminderReceiver.EXTRA_TEXT, note)
         val requestCode = (note + System.currentTimeMillis()).hashCode()
