@@ -8,6 +8,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -100,6 +101,23 @@ class MainActivity : ComponentActivity() {
             if (ttsReady) {
                 textToSpeech?.setSpeechRate(0.92f)
                 textToSpeech?.setPitch(0.88f)
+                textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        runOnUiThread { speaking = true }
+                    }
+                    override fun onDone(utteranceId: String?) {
+                        runOnUiThread {
+                            speaking = false
+                            status = "Voice playback complete"
+                        }
+                    }
+                    override fun onError(utteranceId: String?) {
+                        runOnUiThread {
+                            speaking = false
+                            status = "Voice playback failed"
+                        }
+                    }
+                })
                 if (voiceReplies) status = "Voice engine ready"
             } else {
                 status = "Device text-to-speech engine is unavailable"
@@ -255,7 +273,7 @@ class MainActivity : ComponentActivity() {
                             updated.forEach { message ->
                                 put(JSONObject().put("role", message.role).put("content", message.content))
                             }
-                        }).put("language", if (responseLanguage == "English") "en" else "hi")
+                        }).put("language", when (responseLanguage) { "English" -> "en"; "Hindi" -> "hi"; else -> "auto" })
                         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
                         val code = connection.responseCode
                         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
