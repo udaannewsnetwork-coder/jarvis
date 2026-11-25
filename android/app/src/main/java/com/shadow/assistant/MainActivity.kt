@@ -425,8 +425,13 @@ private fun ShadowHome(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("S", color = Ice, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text("  S H A D O W", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp)
+                    ShadowLogoMark(modifier = Modifier.size(42.dp))
+                    Column(modifier = Modifier.padding(start = 10.dp)) {
+                        Text("SHADOW", color = Color.White, fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 2.6.sp)
+                        Text("PERSONAL INTELLIGENCE", color = Color(0xFF7896B8),
+                            fontSize = 7.sp, letterSpacing = 1.35.sp)
+                    }
                     Spacer(Modifier.weight(1f))
                     if (messages.isNotEmpty()) {
                         Text("CLEAR", color = Color(0xFFFF9A9A), fontSize = 9.sp,
@@ -592,6 +597,36 @@ private fun ShadowHome(
             titleContentColor = Color.White,
             textContentColor = Color(0xFFB8C9DD)
         )
+    }
+}
+
+@Composable
+private fun ShadowLogoMark(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val stroke = size.minDimension * 0.055f
+        val center = this.center
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFF102C50), Color(0xFF06101F)),
+                center = center,
+                radius = size.minDimension * 0.72f
+            ),
+            radius = size.minDimension * 0.48f
+        )
+        drawCircle(color = Blue.copy(alpha = 0.85f), radius = size.minDimension * 0.45f,
+            style = Stroke(width = stroke * 0.55f))
+        val mark = androidx.compose.ui.graphics.Path().apply {
+            moveTo(size.width * 0.68f, size.height * 0.29f)
+            cubicTo(size.width * 0.58f, size.height * 0.17f, size.width * 0.34f, size.height * 0.21f, size.width * 0.32f, size.height * 0.39f)
+            cubicTo(size.width * 0.29f, size.height * 0.54f, size.width * 0.72f, size.height * 0.46f, size.width * 0.68f, size.height * 0.64f)
+            cubicTo(size.width * 0.65f, size.height * 0.82f, size.width * 0.39f, size.height * 0.83f, size.width * 0.30f, size.height * 0.69f)
+        }
+        drawPath(path = mark, brush = Brush.linearGradient(listOf(Ice, Blue)),
+            style = Stroke(width = stroke * 1.35f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round))
+        drawCircle(color = Ice, radius = stroke * 0.7f,
+            center = androidx.compose.ui.geometry.Offset(size.width * 0.75f, size.height * 0.22f))
     }
 }
 
