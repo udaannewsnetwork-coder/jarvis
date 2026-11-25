@@ -17,6 +17,7 @@
         android:icon="@drawable/shadow_logo"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+        <receiver android:name=".ReminderReceiver" android:enabled="true" android:exported="false" />
         <service android:name=".BackgroundWakeService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity
             android:name=".MainActivity"
