@@ -6,7 +6,7 @@ type Message = { role: "user" | "assistant"; content: string };
 type AssistantMode = "idle" | "listening" | "thinking" | "speaking";
 
 const welcome: Message[] = [
-  { role: "assistant", content: "Hello. I am JARVIS. I am ready when you are." }
+  { role: "assistant", content: "Hello. I am SHADOW. I am ready when you are." }
 ];
 
 export default function HomePage() {
@@ -182,7 +182,7 @@ export default function HomePage() {
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="app-header">
-        <div className="wordmark"><span className="wordmark-mark">J</span><span>JARVIS</span></div>
+        <div className="wordmark"><span className="wordmark-mark">J</span><span>SHADOW</span></div>
         <div className="header-actions">
           <span className={`system-status ${loading || listening || recording ? "active" : ""}`}><i />{modeLabel}</span>
           <button className="icon-button language-button" onClick={() => setLanguage((v) => v === "hi" ? "en" : "hi")} aria-label="Change language">{language === "hi" ? "HI" : "EN"}</button>
@@ -207,7 +207,7 @@ export default function HomePage() {
 
         <div className="voice-caption">
           <span className="voice-caption-main">{recording || listening ? "I'm listening" : loading ? "One moment" : mode === "speaking" ? "Speaking" : "Tap the core to speak"}</span>
-          <span className="voice-caption-sub">{recording ? "Tap again when you are finished" : listening ? "Speak naturally · Hindi or English" : loading ? "JARVIS is processing your request" : "Or type your message below"}</span>
+          <span className="voice-caption-sub">{recording ? "Tap again when you are finished" : listening ? "Speak naturally · Hindi or English" : loading ? "SHADOW is processing your request" : "Or type your message below"}</span>
         </div>
 
         <div className="quick-actions">
@@ -231,7 +231,7 @@ export default function HomePage() {
       <footer className="composer-area">
         {error && <div className="error-note" role="alert">{error}</div>}
         <form className="composer" onSubmit={submitChat}>
-          <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Message JARVIS…" aria-label="Message JARVIS" />
+          <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Message SHADOW…" aria-label="Message SHADOW" />
           <button type="button" className={recording ? "mic-button recording" : "mic-button"} onClick={() => void toggleRecording()} disabled={loading} aria-label={recording ? "Stop recording" : "Record voice"}>{recording ? "■" : "●"}</button>
           <button type="submit" className="send-button" disabled={loading || !input.trim()} aria-label="Send message">↑</button>
         </form>
