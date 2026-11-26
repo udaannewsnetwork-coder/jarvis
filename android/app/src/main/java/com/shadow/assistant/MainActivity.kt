@@ -517,7 +517,7 @@ class MainActivity : ComponentActivity() {
                         doOutput = true
                         setRequestProperty("Content-Type", "application/json; charset=utf-8")
                         setRequestProperty("Accept", "application/json")
-                        setRequestProperty("Authorization", "Bearer $apiToken")
+                        if (apiToken.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiToken")
                     }
                     try {
                         val payload = JSONObject().put("memories", JSONArray().apply { savedMemories.forEach { put(it) } }).put("messages", JSONArray().apply {
@@ -1028,6 +1028,7 @@ private fun ShadowHome(
        Text("AI CHAT",color=Color.White,fontSize=16.sp,fontWeight=FontWeight.Bold); Spacer(Modifier.weight(1f))
        if(messages.isNotEmpty()) Text("CLEAR",color=Color(0xFFFF9A9A),fontSize=10.sp,modifier=Modifier.clickable { showClearConfirmation=true }.padding(8.dp))
       }
+      Text(status,color=Color(0xFF91A4BD),fontSize=10.sp,maxLines=2,modifier=Modifier.fillMaxWidth().padding(vertical=4.dp))
       if(messages.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center) {
        Column(horizontalAlignment=Alignment.CenterHorizontally) { ShadowOrb(listening= listening,onClick=onVoiceTap); Text("Ask SHADOW anything",color=Color.White,fontSize=18.sp); Text("Cloud AI assistant • Hindi & English",color=Ice,fontSize=11.sp) }
       } else LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=listState,verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -1075,7 +1076,7 @@ private fun ShadowHome(
     if(selectedTab!="Settings") Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
      Button(onClick=onVoiceTap,colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF132A46)),modifier=Modifier.height(50.dp)) { Text("🎙",color=Ice) }
      OutlinedTextField(value=draft,onValueChange=onDraftChange,modifier=Modifier.weight(1f).padding(horizontal=7.dp),placeholder={ Text(if(selectedTab=="Studio") "Describe your app…" else "Message SHADOW…") },maxLines=2,textStyle=androidx.compose.ui.text.TextStyle(color=Color.White,fontSize=13.sp))
-     Button(onClick=onSend,enabled=!sending&&draft.isNotBlank(),colors=ButtonDefaults.buttonColors(containerColor=Blue),modifier=Modifier.height(50.dp)) { Text("➤",color=Color.White) }
+     Button(onClick={ if(selectedTab=="Home") selectedTab="Chat"; onSend() },enabled=!sending&&draft.isNotBlank(),colors=ButtonDefaults.buttonColors(containerColor=Blue),modifier=Modifier.height(50.dp)) { Text("➤",color=Color.White) }
     }
     Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceAround,verticalAlignment=Alignment.CenterVertically) {
      listOf("Home","Chat","Studio","Skills","Settings").forEach { tab ->
