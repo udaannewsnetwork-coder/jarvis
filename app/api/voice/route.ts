@@ -1,52 +1,54 @@
-import OpenAI from 'openai';
-import { NextRequest } from 'next/server';
+import OpenAI from "openai";
+import { NextRequest } from "next/server";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return Response.json({ error: 'Missing OPENAI_API_KEY in environment variables.' }, { status: 500 });
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return Response.json({ error: "Voice AI is not configured yet. Add OPENAI_API_KEY in your deployment environment." }, { status: 503 });
     }
 
     const formData = await request.formData();
-    const audio = formData.get('audio') as Blob | null;
-    const language = (formData.get('language') as string) || 'hi';
+    const audio = formData.get("audio");
+    const languageValue = formData.get("language");
+    const language = languageValue === "en" ? "en" : "hi";
 
-    if (!audio) {
-      return Response.json({ error: 'No audio file provided.' }, { status: 400 });
+    if (!(audio instanceof Blob) || audio.size === 0) {
+      return Response.json({ error: "Please record audio before sending." }, { status: 400 });
+    }
+    if (audio.size > MAX_AUDIO_BYTES) {
+      return Response.json({ error: "Audio is too large. Please keep recordings under 20 MB." }, { status: 413 });
     }
 
-    const arrayBuffer = await audio.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
+    const client = new OpenAI({ apiKey });
+    const buffer = Buffer.from(await audio.arrayBuffer());
     const transcription = await client.audio.transcriptions.create({
-      file: new File([buffer], 'recording.webm', { type: audio.type || 'audio/webm' }),
-      model: 'whisper-1',
-      language,
+      file: new File([buffer], "recording.webm", { type: audio.type || "audio/webm" }),
+      model: process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1",
+      language
     });
-
-    const transcript = transcription.text || '';
+    const transcript = transcription.text?.trim() || "";
+    if (!transcript) {
+      return Response.json({ error: "No speech was detected. Please try again." }, { status: 422 });
+    }
 
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
       messages: [
         {
-          role: 'system',
-          content:
-            'You are JARVIS, an advanced AI assistant. Be helpful, concise, and friendly. Respond in the same language as the user query.',
+          role: "system",
+          content: "You are SHADOW, a reliable all-purpose personal AI assistant. Reply naturally in the same language as the user, including Hindi or Hinglish. Help with learning, research, writing, coding and productivity. Be accurate and transparent. Never claim to have performed an external action unless a connected tool confirmed it."
         },
-        { role: 'user', content: transcript },
+        { role: "user", content: transcript }
       ],
-      temperature: 0.8,
-      max_tokens: 500,
+      temperature: 0.6,
+      max_tokens: 900
     });
-
-    const reply = completion.choices[0]?.message?.content || 'I am here and ready to help.';
-
-    return Response.json({ transcript, reply });
+    return Response.json({ transcript, reply: completion.choices[0]?.message?.content || "I am ready to help." });
   } catch (error) {
-    console.error('Voice route error:', error);
-    return Response.json({ error: 'Failed to process audio file.' }, { status: 500 });
+    console.error("SHADOW voice route error:", error);
+    return Response.json({ error: "Voice processing failed. Please try a shorter recording and try again." }, { status: 500 });
   }
 }
